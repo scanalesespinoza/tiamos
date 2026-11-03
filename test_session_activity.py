@@ -96,6 +96,24 @@ class ActivityTests(unittest.TestCase):
         self.assertFalse(detail['alert'])
         self.assertIn('! Pruebas', detail['actions'])
 
+    def test_unavailable_session_marks_stale_data_and_freezes_observed_duration(self):
+        chat = {'state': 'working', 'unavailable': True, 'observed_at': 170,
+            'activity': {'started_at': 100, 'updated_at': 160, 'phase': 'Analizando',
+                'progress': 'Checking the change'}}
+        first = details_text(chat, 500)
+        later = details_text(chat, 5000)
+        self.assertIn('Sin conexión', later['state'])
+        self.assertIn('desactualizados', later['alert'])
+        self.assertIn('Duración observada · 1 min 10 s', first['activity'])
+        self.assertIn('Duración observada · 1 min 10 s', later['activity'])
+        self.assertNotIn('Turno en curso', later['activity'])
+        self.assertEqual(later['report'], 'Checking the change')
+        chat['unavailable'] = False
+        recovered = details_text(chat, 500)
+        self.assertEqual(recovered['state'], 'Trabajando')
+        self.assertFalse(recovered['alert'])
+        self.assertIn('Turno en curso · 6 min 40 s', recovered['activity'])
+
     def test_trace_partial_record_and_truncation_reset_activity(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'rollout.jsonl'

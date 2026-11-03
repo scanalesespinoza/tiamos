@@ -29,6 +29,7 @@ def details_text(chat, now=None):
     now = time.time() if now is None else now
     activity = chat.get('activity') or {}
     terminal = chat.get('terminal') or {}
+    unavailable = bool(chat.get('unavailable'))
     working = chat.get('state') == 'working'
     state = 'Trabajando' if working else 'En descanso'
     if terminal and not terminal.get('live'):
@@ -39,11 +40,18 @@ def details_text(chat, now=None):
     finished = activity.get('finished_at')
     if not working and finished and terminal.get('live'):
         state += ' · turno interrumpido' if activity.get('phase') == 'Turno interrumpido' else ' · turno terminado'
+    if unavailable:
+        state = 'Sin conexión · última información disponible'
     duration = ''
     if started:
         end = now if working else finished
+        if working and unavailable:
+            end = chat.get('observed_at') or started
         if end:
-            duration = ('Turno en curso · ' if working else 'Duración del último turno · ') + time_text(end - started)
+            prefix = 'Duración del último turno · '
+            if working:
+                prefix = 'Duración observada · ' if unavailable else 'Turno en curso · '
+            duration = prefix + time_text(end - started)
     updated = activity.get('updated_at')
     observed = 'Sin actividad reciente disponible'
     if updated:
@@ -51,12 +59,16 @@ def details_text(chat, now=None):
     phase = activity.get('phase') or 'En espera'
     if not working and not finished:
         phase = 'Sin turno en curso'
+    if unavailable:
+        phase = 'Última fase observada · ' + phase
     lines = [phase, observed]
     if duration:
         lines.append(duration)
     count = activity.get('action_count', 0)
     if count:
-        lines.append(f"{count} acciones observadas en {'este' if working else 'el último'} turno")
+        turn_label = 'el turno observado' if unavailable else 'este turno' if working else 'el último turno'
+        action_label = 'acción observada' if count == 1 else 'acciones observadas'
+        lines.append(f'{count} {action_label} en {turn_label}')
     actions = []
     for action in activity.get('actions', [])[:3]:
         mark = {'ok': '✓', 'error': '!', 'info': '·'}.get(action.get('outcome'), '·')
@@ -66,6 +78,8 @@ def details_text(chat, now=None):
     alert = ''
     if latest.get('outcome') == 'error':
         alert = 'La última herramienta informó un error.' + (' La sesión sigue trabajando.' if working else '')
+    if unavailable:
+        alert = 'No se pudo actualizar la sesión. Los detalles pueden estar desactualizados.'
     return {'state': state, 'activity': '\n'.join(lines), 'actions': '\n'.join(actions),
         'objective': activity.get('objective') or '', 'report': report or '', 'alert': alert,
         'report_title': 'Último avance comunicado' if working or not activity.get('final') else 'Último resultado comunicado'}
@@ -243,6 +257,8 @@ class DetailsCard:
             return
         chat = dict(entry.get('chat') or {})
         chat['minimized'] = entry.get('minimized')
+        chat['unavailable'] = entry.get('unavailable', False)
+        chat['observed_at'] = entry.get('observed_at')
         fields = details_text(chat)
         fields.update(project=safe_preview(chat.get('project') or 'Codex CLI', 60),
             title=safe_preview(chat.get('title', 'Sesión de Codex'), 100),
@@ -251,6 +267,7 @@ class DetailsCard:
             fields['report_title'] = ''
         signature = tuple(fields.items())
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
+        self.labels['state'].configure(fg='#f0bd75' if chat['unavailable'] else '#77e4c8')
         if signature != self.signature:
             self.signature = signature
             for name, label in self.labels.items():
