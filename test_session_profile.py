@@ -43,14 +43,30 @@ class ProfileCardTests(unittest.TestCase):
         self.assertTrue(self.card.pinned)
         self.assertEqual(self.card.pin_button.cget('text'), 'Fijada')
         self.assertEqual(self.card.labels['objective'].winfo_manager(), '')
-        self.assertEqual(self.card.labels['profile_today'].winfo_manager(), 'grid')
+        self.assertEqual(self.card.chart.canvas.winfo_manager(), 'grid')
+        self.assertEqual(self.card.labels['profile_today'].winfo_manager(), '')
         self.assertIn('Nivel 1', self.card.labels['profile_level'].cget('text'))
         self.assertEqual(self.card.profile_button.cget('text'), 'Actividad')
         self.assertLess(self.card.window.winfo_reqheight(), 550)
         self.assertEqual(self.entries['session']['size'], (178, 152))
+        self.card.graph_button.invoke()
+        self.assertEqual(self.card.chart.canvas.winfo_manager(), '')
+        self.assertEqual(self.card.labels['profile_today'].winfo_manager(), 'grid')
+        self.assertTrue(self.card.pinned)
+        self.card.graph_button.invoke()
+        self.assertEqual(self.card.chart.canvas.winfo_manager(), 'grid')
         self.card.toggle_profile()
         self.assertEqual(self.card.labels['objective'].winfo_manager(), 'grid')
         self.assertEqual(self.card.labels['profile_today'].winfo_manager(), '')
+        self.assertEqual(self.card.chart.canvas.winfo_manager(), '')
+
+    def test_charts_do_not_redraw_without_changed_data_and_stay_bounded(self):
+        self.card.toggle_profile()
+        redraws = self.card.chart.redraws
+        for _ in range(10):
+            self.card.refresh()
+        self.assertEqual(self.card.chart.redraws, redraws)
+        self.assertLess(len(self.card.chart.canvas.find_all()), 50)
 
     def test_profile_only_does_not_acknowledge_an_unread_result(self):
         with patch.object(self.card, 'no_activate'), patch.object(self.card.window, 'deiconify'), \

@@ -7,6 +7,20 @@ FIELDS = ('xp', 'actions', 'ok', 'errors', 'unknown', 'waits', 'api_errors',
           'validations', 'validations_ok', 'edits', 'completed', 'interrupted',
           'completed_seconds', 'timed_turns')
 ACTION_XP_LIMIT = 50
+AREAS = {'validation': 'Validación', 'editing': 'Edición', 'exploration': 'Exploración',
+         'delivery': 'Entrega / Git', 'tools': 'Herramientas'}
+
+
+def action_area(label):
+    if label in ('Pruebas y validación', 'Compilación'):
+        return 'validation'
+    if label == 'Edición de archivos':
+        return 'editing'
+    if label in ('Exploración de archivos', 'Investigación', 'Inspección visual'):
+        return 'exploration'
+    if label in ('Publicación y revisión', 'Sincronización Git', 'Revisión de cambios'):
+        return 'delivery'
+    return 'tools'
 
 
 def empty_counts():
@@ -31,6 +45,9 @@ class SessionMetrics:
         self.turn_key = None
         self.recent_turns = deque(maxlen=256)
         self.action_xp = 0
+        self.turn_counts = empty_counts()
+        self.progression = deque(maxlen=7)
+        self.areas = {key: dict(ok=0, errors=0, unknown=0) for key in AREAS}
 
     def bump(self, stamp, **values):
         day = stamp.astimezone().date().isoformat()
@@ -38,6 +55,8 @@ class SessionMetrics:
         for key, value in values.items():
             self.total[key] += value
             daily[key] += value
+            if self.active:
+                self.turn_counts[key] += value
         # Total survives; only eight local calendar buckets are needed in memory.
         if len(self.days) > 8:
             del self.days[min(self.days)]
@@ -51,6 +70,7 @@ class SessionMetrics:
         self.started_at = stamp.timestamp()
         self.turn_key = turn
         self.action_xp = 0
+        self.turn_counts = empty_counts()
 
     def action(self, label, outcome, stamp):
         if not self.active:
@@ -62,6 +82,7 @@ class SessionMetrics:
             self.bump(stamp, api_errors=1)
             return
         outcome_key = {'ok': 'ok', 'error': 'errors'}.get(outcome, 'unknown')
+        self.areas[action_area(label)][outcome_key] += 1
         counts = {'actions': 1, outcome_key: 1}
         validation = label in ('Pruebas y validación', 'Compilación')
         if validation:
@@ -76,7 +97,6 @@ class SessionMetrics:
     def finish(self, stamp, completed, turn=None):
         if not self.active or (turn and self.turn_key and turn != self.turn_key):
             return
-        self.active = False
         if completed:
             elapsed = stamp.timestamp() - self.started_at
             counts = {'completed': 1, 'xp': 10}
@@ -85,12 +105,18 @@ class SessionMetrics:
             self.bump(stamp, **counts)
         else:
             self.bump(stamp, interrupted=1)
+        self.active = False
+        self.progression.append({'xp': self.total['xp'], 'earned': self.turn_counts['xp'],
+            'ok': self.turn_counts['ok'], 'errors': self.turn_counts['errors'],
+            'completed': completed})
 
     def summary(self, now=None):
         now = now or dt.datetime.now().astimezone()
         day = now.astimezone().date().isoformat()
         return {**level_progress(self.total['xp']), 'day': day,
-                'total': dict(self.total), 'today': dict(self.days.get(day, empty_counts()))}
+                'total': dict(self.total), 'today': dict(self.days.get(day, empty_counts())),
+                'progression': [dict(turn) for turn in self.progression],
+                'areas': {key: dict(counts) for key, counts in self.areas.items()}}
 
 
 def profile_text(stats):
