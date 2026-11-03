@@ -10,8 +10,8 @@ STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'error', 'sleep
 
 
 def provider_theme(provider):
-    return {'name': 'Claude', 'background': '#ffe4cc', 'foreground': '#75421f'} if provider == 'claude' else {
-        'name': 'Codex', 'background': '#dcecff', 'foreground': '#25496b'}
+    return {'name': 'Claude', 'background': '#dfc2a8', 'foreground': '#75421f'} if provider == 'claude' else {
+        'name': 'Codex', 'background': '#b8cce3', 'foreground': '#25496b'}
 
 
 def identity(ident, registry):
