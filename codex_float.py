@@ -15,6 +15,7 @@ import time
 from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
+from session_activity import Activity, safe_preview
 
 BASE = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
@@ -41,7 +42,7 @@ def running():
 
 
 class Trace:
-    """Incrementally inspect lifecycle metadata; do not retain message content."""
+    """Incrementally inspect lifecycle and bounded, sanitized activity metadata."""
     END_EVENTS = {'task_complete', 'task_completed', 'turn_aborted', 'task_aborted', 'task_interrupted', 'turn_cancelled', 'session_end'}
 
     def __init__(self, path):
@@ -50,12 +51,14 @@ class Trace:
         self.pending = b''
         self.active = set()
         self.last_activity = None
+        self.activity = Activity()
 
     def read(self):
         if self.path.stat().st_size < self.offset:
             self.offset, self.pending = 0, b''
             self.active.clear()
             self.last_activity = None
+            self.activity = Activity()
         with self.path.open('rb') as stream:
             stream.seek(self.offset)
             content = self.pending + stream.read()
@@ -67,15 +70,16 @@ class Trace:
                 item = json.loads(line)
             except (ValueError, UnicodeDecodeError):
                 continue
-            if item.get('type') != 'event_msg':
+            if not isinstance(item, dict) or not isinstance(item.get('payload'), dict):
                 continue
             payload = item.get('payload', {})
             kind = payload.get('type')
-            if kind not in {'task_started', 'user_message'} | self.END_EVENTS:
-                continue
             try:
                 stamp = dt.datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00')).astimezone()
-            except (KeyError, ValueError):
+            except (KeyError, ValueError, TypeError, AttributeError):
+                continue
+            self.activity.observe(item, stamp)
+            if item.get('type') != 'event_msg' or kind not in {'task_started', 'user_message'} | self.END_EVENTS:
                 continue
             if self.last_activity is None or stamp > self.last_activity:
                 self.last_activity = stamp
@@ -157,6 +161,8 @@ class Reader:
             chat = {'id': ident, 'title': title or 'Chat de Codex', 'state': state}
             if self.cli_only:
                 chat['terminal'] = terminal
+                chat['project'] = safe_preview(str(cwd).replace('\\', '/').rstrip('/').rsplit('/', 1)[-1], 60)
+                chat['activity'] = trace.activity.summary()
             result.append(chat)
         self.traces = {key: trace for key, trace in self.traces.items() if key in seen}
         return result
@@ -164,6 +170,7 @@ class Reader:
 
 def serve():
     import tkinter as tk
+    from session_details import DetailsCard, compact_caption
     from PIL import Image, ImageTk, ImageSequence
     import ctypes
     import msvcrt
@@ -222,6 +229,7 @@ def serve():
 
     def apply_layout(anchor):
         nonlocal layout_area, follow_selection
+        details.hide()
         layout['mode'] = anchor
         layout_area = monitor_work_area()
         follow_selection = False
@@ -260,6 +268,7 @@ def serve():
 
     def open_chat(ident):
         nonlocal pending, selected, focus_error
+        details.hide()
         entry = widgets[ident]
         entry['drag'].clear()
         target = bound_window(ident)
@@ -287,6 +296,8 @@ def serve():
         nonlocal bind_request, focus_error
         bind_request = (ident, time.monotonic() + 8)
         focus_error = None
+
+    details = DetailsCard(root, widgets, open_chat)
 
     def worker():
         try:
@@ -347,12 +358,14 @@ def serve():
         label.pack()
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
+        entry['chat'] = chat
         widgets[ident] = entry
         if ident not in layout_order:
             layout_order.append(ident)
             save_layout()
 
         def press(event):
+            details.hide()
             drag.update(x=event.x_root - window.winfo_x(), y=event.y_root - window.winfo_y())
 
         def move(event):
@@ -370,6 +383,7 @@ def serve():
             drag.clear()
 
         menu = tk.Menu(window, tearoff=False)
+        menu.add_command(label='Ver detalles de la sesión', command=lambda: details.show(ident, pinned=True))
         menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
         menu.add_separator()
@@ -378,12 +392,22 @@ def serve():
         menu.add_separator()
         menu.add_command(label='Apagar todos', command=quit_all)
         menu.add_command(label='Cerrar menu')
+
+        def show_menu(event):
+            details.hide()
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
         for surface in (window, title, picture, label):
             surface.bind('<ButtonPress-1>', press)
             surface.bind('<B1-Motion>', move)
             surface.bind('<ButtonRelease-1>', release)
             surface.bind('<Double-Button-1>', lambda event: open_chat(ident))
-            surface.bind('<Button-3>', lambda event: menu.tk_popup(event.x_root, event.y_root))
+            surface.bind('<Button-3>', show_menu)
+            surface.bind('<Enter>', lambda event: details.request(ident))
+            surface.bind('<Leave>', lambda event: details.leave())
 
     tick_number = 0
 
@@ -416,6 +440,7 @@ def serve():
                     if entry['state'] != chat['state']:
                         entry['frame'] = 0
                     entry['state'] = chat['state']
+                    entry['chat'] = chat
                     entry['chat_title'] = chat['title']
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
@@ -510,7 +535,7 @@ def serve():
             if state == 'working' or tick_number % 2 == 0:
                 entry['frame'] = (entry['frame'] + 1) % len(frames[state])
             entry['picture'].configure(image=(frames if full else small_frames)[state][entry['frame']])
-            caption = ('Trabajando' if full else 'Activo') if state == 'working' else ('En descanso' if full else 'Zzz')
+            caption = compact_caption(entry['chat'], full)
             if pending and pending[0] == ident:
                 caption = 'Abriendo...'
             if bind_request and bind_request[0] == ident:
@@ -519,6 +544,8 @@ def serve():
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
         position_group()
+        if tick_number % 10 == 0:
+            details.refresh()
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
@@ -532,6 +559,9 @@ def serve():
                 'visible': {ident: v['window'].state() != 'withdrawn' for ident, v in widgets.items()},
                 'minimized': {ident: v.get('minimized', False) for ident, v in widgets.items()},
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
+                'details': {'session': details.ident, 'pinned': details.pinned},
+                'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)
+                    for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count')} for ident, v in widgets.items()},
             })
         tick_number += 1
         root.after(100, tick)

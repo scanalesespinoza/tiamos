@@ -97,7 +97,7 @@ class GlobalHotkeys:
         self.thread.join(timeout=2)
 
 
-def monitor_work_area():
+def monitor_work_area(position=None):
     import ctypes as C
     from ctypes import wintypes as W
 
@@ -109,7 +109,10 @@ def monitor_work_area():
     user.MonitorFromPoint.restype = W.HANDLE
     user.GetMonitorInfoW.argtypes = [W.HANDLE, C.POINTER(MonitorInfo)]
     point = W.POINT()
-    user.GetCursorPos(C.byref(point))
+    if position is None:
+        user.GetCursorPos(C.byref(point))
+    else:
+        point.x, point.y = map(int, position)
     info = MonitorInfo()
     info.size = C.sizeof(info)
     if not user.GetMonitorInfoW(user.MonitorFromPoint(point, 2), C.byref(info)):
