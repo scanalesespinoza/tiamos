@@ -101,9 +101,10 @@ def compact_caption(chat, full=True):
 
 
 class DetailsCard:
-    def __init__(self, root, entries, open_chat):
+    def __init__(self, root, entries, open_chat, on_view=None):
         import tkinter as tk
         self.root, self.entries, self.open_chat = root, entries, open_chat
+        self.on_view = on_view
         self.ident = None
         self.pinned = False
         self.pending = None
@@ -234,6 +235,8 @@ class DetailsCard:
         self.no_activate()
         self.window.deiconify()
         self.window.lift()
+        if self.on_view:
+            self.on_view(ident)
 
     def toggle_pin(self):
         self.pinned = not self.pinned
@@ -273,6 +276,7 @@ class DetailsCard:
         signature = tuple(fields.items())
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
         self.labels['state'].configure(fg='#f0bd75' if chat['unavailable'] else '#77e4c8')
+        self.labels['project'].configure(fg=entry.get('accent', '#77e4c8'))
         if signature != self.signature:
             self.signature = signature
             for name, label in self.labels.items():
@@ -292,3 +296,5 @@ class DetailsCard:
             obstacles=obstacles, preferred=self.location if context == self.placement_context else None)
         self.placement_context, self.location = context, location
         self.window.geometry(f'382x{self.window.winfo_reqheight()}{location[0]:+d}{location[1]:+d}')
+        if self.window.winfo_ismapped() and self.on_view:
+            self.on_view(self.ident)
