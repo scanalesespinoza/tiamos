@@ -62,6 +62,8 @@ def category(command='', tool=''):
         return 'Inspección visual'
     if re.search(r'\b(get-content|get-childitem|rg|find|cat|ls)\b', source) or 'read' in name:
         return 'Exploración de archivos'
+    if re.search(r'(?:^|[._])(?:wait|write_stdin|sleep|wait_agent)$', name) or re.search(r'\btools\.write_stdin\s*\(', source):
+        return 'Esperando una herramienta'
     return 'Uso de herramientas'
 
 

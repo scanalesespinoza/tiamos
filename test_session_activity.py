@@ -17,6 +17,20 @@ class ActivityTests(unittest.TestCase):
     def observe(self, event, **payload):
         self.activity.observe({'type': 'event_msg', 'payload': {'type': event, **payload}}, self.now)
 
+    def test_explicit_tool_waits_are_distinct_without_guessing_user_input_or_completion(self):
+        for name in ('functions.wait', 'functions.write_stdin', 'clock.sleep', 'collaboration.wait_agent'):
+            self.assertEqual(category(tool=name), 'Esperando una herramienta')
+        self.assertEqual(category('await tools.write_stdin({session_id: 123})', 'functions.exec'), 'Esperando una herramienta')
+        self.assertEqual(category('await tools.write_stdin({}); python -m unittest', 'functions.exec'), 'Pruebas y validación')
+        self.assertEqual(category(tool='functions.request_user_input_async'), 'Uso de herramientas')
+        self.assertEqual(category('Wait for the user', 'some_tool'), 'Uso de herramientas')
+        self.observe('task_started', turn_id='waiting')
+        self.activity.observe({'type': 'response_item', 'payload': {'type': 'function_call',
+            'name': 'functions.wait', 'arguments': '{"cell_id":"123"}'}}, self.now)
+        self.assertIsNone(self.activity.finished_at)
+        self.assertEqual(compact_caption({'state': 'working', 'activity': self.activity.summary()}), 'Esperando')
+        self.assertEqual(compact_caption({'state': 'sleeping', 'activity': self.activity.summary()}), 'En descanso')
+
     def test_objective_survives_continuation_and_instruction_context(self):
         self.observe('user_message', message='Improve the floating companions')
         self.observe('task_started', turn_id='a')
