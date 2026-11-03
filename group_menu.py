@@ -96,7 +96,8 @@ class HistoryPicker:
 
 
 class GroupMenu:
-    def __init__(self, root, details, entries, hidden, individual_hidden, toggle_all, toggle_one, show_history, today_only):
+    def __init__(self, root, details, entries, hidden, individual_hidden, toggle_all, toggle_one, show_history, today_only,
+                 sounds=None, quiet=lambda: False):
         import tkinter as tk
         from session_details import DetailsCard
         self.details, self.entries = details, entries
@@ -120,6 +121,8 @@ class GroupMenu:
             self.canvas.create_oval(16, y, 19, y + 3, fill='#e0e8f3', outline='')
         self.menu = tk.Menu(self.window, tearoff=False)
         self.avatar_menu = tk.Menu(self.menu, tearoff=False)
+        from agent_sounds import SoundMenu
+        self.sound_menu = SoundMenu(self.menu, sounds, quiet) if sounds else None
         self.variables = []
         self.canvas.bind('<Button-1>', self.popup)
         self.canvas.bind('<Button-3>', self.popup)
@@ -148,4 +151,8 @@ class GroupMenu:
         self.menu.add_separator()
         self.menu.add_command(label='Sesiones anteriores…', command=self.show_history)
         self.menu.add_command(label='Volver a sesiones de hoy', command=self.today_only)
+        if self.sound_menu:
+            self.menu.add_separator()
+            self.sound_menu.refresh()
+            self.menu.add_cascade(label='Sonidos', menu=self.sound_menu.menu)
         return self.details.popup_menu(self.menu, event.x_root, event.y_root)

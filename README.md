@@ -110,7 +110,17 @@ Right-click and choose **Personalizar compañero** to select one of eight colors
 
 A newly completed turn gets a three-second celebration and an amber **new result** dot. The dot remains until you open that session's detail card or successfully activate its terminal, including across avatar restarts. A new working turn does not erase an unread prior result. Interrupted turns do not celebrate or create a result notice; neither do startup history or turns whose latest tool reported an error celebrate. A normal completed turn may still require follow-up: the celebration marks the end of the turn, not independently verified success.
 
-Right-click any avatar and enable **Modo tranquilo** to freeze animations and suppress waves/confetti for all companions. Colors, activity captions, result dots, hover cards, dragging, and terminal selection remain available. The setting persists across restarts. There are no sounds or autonomous desktop movement.
+Right-click any avatar and enable **Modo tranquilo** to freeze animations and suppress waves/confetti and notification sounds for all companions. Colors, activity captions, result dots, hover cards, dragging, and terminal selection remain available. The setting persists across restarts. There is no autonomous desktop movement.
+
+### Notification sounds
+
+Open **⋮ → Sonidos**, or right-click any avatar and choose **Sonidos**, to enable/disable audio, select **Volumen** (0, 10, 25, 50, 75, or 100%), or choose **Probar sonido**. Sounds start enabled at 25%. Settings persist in `sounds.json`; they control only this application's audio, not Windows volume. Quiet mode temporarily suppresses sounds without changing that preference. Hiding avatars does not mute their notifications.
+
+Four brief, soft synthesized chimes distinguish a newly completed turn, an observed tool/API error, an explicit request for intervention, and a level increase. Completion is an observed lifecycle event, not a certification that the work is correct. Interrupted turns and completions whose last tool failed do not play the completion chime. Intervention is announced only when the provider exposes the explicit **Esperando intervención** state (currently Claude); ordinary tool waits and inactivity do not imply a request for help.
+
+Startup, first discovery of a session, and historical records are silent. Only subsequent fresh events notify. Simultaneous events produce one chime, prioritizing intervention, error, level, then completion. Automatic playback is limited to one chime per three seconds, with repeated errors limited to one per session per twenty seconds. Suppressed events are not queued or replayed after unmuting. **Modo tranquilo** also disables the preview until it is turned off.
+
+Playback uses Windows asynchronous audio and short local WAV files generated on demand (at most four files, under 120 KB total). It adds no audio dependency, worker process, or polling timer. `codex-float status` exposes the sound preference, volume, quiet suppression, and any playback error; an unavailable audio device does not stop the avatars.
 
 Hover over an avatar for a compact detail card without moving keyboard focus away from the terminal. The card shows the project, current objective, working/resting state, turn duration, latest observed activity, and up to three recent tool outcomes. The floating caption summarizes the current observed phase, such as editing, validation, or investigation.
 
