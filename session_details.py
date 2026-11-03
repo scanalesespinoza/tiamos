@@ -269,6 +269,10 @@ class DetailsCard:
             self.leave()
 
     def toggle_profile(self):
+        # Explicit navigation must survive resize/reflow away from the pointer.
+        self.cancel_request()
+        self.cancel_leave()
+        self.pinned = True
         self.profile = not self.profile
         self.signature = None
         self.refresh()
