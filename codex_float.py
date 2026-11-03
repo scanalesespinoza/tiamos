@@ -90,11 +90,19 @@ class Trace:
 
 
 class Reader:
-    def __init__(self, codex=CODEX, cli_only=False, registration_loader=registrations):
+    def __init__(self, codex=CODEX, cli_only=False, registration_loader=registrations, discover=False):
         self.codex = codex
         self.traces = {}
         self.cli_only = cli_only
         self.registration_loader = registration_loader
+        self.discovery = None
+        if discover:
+            from terminal_discovery import TerminalDiscovery
+            self.discovery = TerminalDiscovery()
+
+    def close(self):
+        if self.discovery:
+            self.discovery.close()
 
     def snapshot(self, now=None):
         now = now or dt.datetime.now().astimezone()
@@ -108,15 +116,27 @@ class Reader:
             extra = ' OR id IN (' + ','.join('?' for _ in terminals) + ')' if terminals else ''
             columns = {row[1] for row in connection.execute('PRAGMA table_info(threads)')}
             title = "COALESCE(NULLIF(name,''),title)" if 'name' in columns else 'title'
-            rows = connection.execute(f'''SELECT id, {title}, rollout_path, source
-                FROM threads WHERE archived=0 AND (updated_at>=?{extra})
-                AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
+            cwd = 'cwd' if 'cwd' in columns else "''"
+            name = 'name' if 'name' in columns else "''"
+            fields = f'id, {title}, rollout_path, source, {cwd}, {name}, title, updated_at'
+            if self.discovery:
+                rows = connection.execute(f'''SELECT {fields} FROM threads WHERE archived=0
+                    AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC LIMIT 500''').fetchall()
+            else:
+                rows = connection.execute(f'''SELECT {fields}
+                    FROM threads WHERE archived=0 AND (updated_at>=?{extra})
+                    AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
+        if self.discovery:
+            metadata = [{'id': row[0], 'cwd': row[4], 'name': row[5], 'title': row[6], 'recent': row[7] >= midnight} for row in rows]
+            terminals.update(self.discovery.update(metadata))
         result = []
         seen = set()
-        for ident, title, path, source in rows:
+        for ident, title, path, source, cwd, name, original_title, updated_at in rows:
             if 'subagent' in source.lower():
                 continue
             if self.cli_only and source not in ('cli', '"cli"') and ident not in terminals:
+                continue
+            if updated_at < midnight and ident not in terminals:
                 continue
             seen.add(ident)
             if ident not in self.traces or self.traces[ident].path != Path(path):
@@ -175,7 +195,7 @@ def serve():
     widgets = {}
     updates = queue.Queue(maxsize=1)
     stop = threading.Event()
-    reader = Reader(cli_only=True)
+    reader = Reader(cli_only=True, discover=True)
     last_error = None
     native = Windows()
     bindings_path = STATE / 'window-bindings.json'
@@ -184,6 +204,7 @@ def serve():
     pending = None
     bind_request = None
     focus_error = None
+    selection_epoch = 0
 
     def bound_window(ident):
         binding = bindings.get(ident)
@@ -194,10 +215,11 @@ def serve():
         return None
 
     def associate(ident, window, manual=False):
-        nonlocal selected, focus_error
+        nonlocal selected, focus_error, selection_epoch
         bindings[ident] = {'hwnd': window.hwnd, 'pid': window.pid, 'executable': window.executable, 'manual': manual}
         atomic_json(bindings_path, bindings)
         selected = ident
+        selection_epoch = time.time()
         focus_error = None
         widgets[ident]['docked'] = True
 
@@ -209,6 +231,13 @@ def serve():
         terminal = entry.get('terminal') or {}
         if target and (bindings.get(ident, {}).get('manual') or terminal.get('live')):
             native.activate(target)
+            if terminal.get('kind') == 'tab':
+                from terminal_discovery import select_tab
+                try:
+                    select_tab(terminal)
+                except RuntimeError as error:
+                    focus_error = str(error)
+                    return 'break'
             associate(ident, target, manual=bindings.get(ident, {}).get('manual', False))
             return 'break'
         try:
@@ -225,17 +254,20 @@ def serve():
         focus_error = None
 
     def worker():
-        while not stop.is_set():
-            try:
-                update = (reader.snapshot(), None)
-            except Exception as error:
-                update = (None, f'{type(error).__name__}: {error}')
-            try:
-                updates.get_nowait()
-            except queue.Empty:
-                pass
-            updates.put(update)
-            stop.wait(2)
+        try:
+            while not stop.is_set():
+                try:
+                    update = (reader.snapshot(), None)
+                except Exception as error:
+                    update = (None, f'{type(error).__name__}: {error}')
+                try:
+                    updates.get_nowait()
+                except queue.Empty:
+                    pass
+                updates.put(update)
+                stop.wait(2)
+        finally:
+            reader.close()
 
     def bounds():
         user32 = ctypes.windll.user32
@@ -339,7 +371,7 @@ def serve():
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
                     host = native.inspect(terminal.get('hwnd')) if terminal.get('live') else None
-                    if host and host.pid == terminal.get('window_pid') and terminal.get('token') in host.title:
+                    if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or terminal.get('token') in host.title):
                         binding = {'hwnd': host.hwnd, 'pid': host.pid, 'executable': host.executable, 'manual': False}
                         if bindings.get(chat['id']) != binding:
                             bindings[chat['id']] = binding
@@ -368,6 +400,14 @@ def serve():
                 associate(ident, target)
                 pending = None
         if not pending and not bind_request:
+            # Native tab selection distinguishes sessions sharing the same HWND.
+            tab_selected = [ident for ident, entry in widgets.items()
+                if (entry.get('terminal') or {}).get('kind') == 'tab'
+                and entry['terminal'].get('selected') and entry['terminal'].get('hwnd') == foreground
+                and entry['terminal'].get('heartbeat', 0) >= selection_epoch]
+            if len(tab_selected) == 1 and selected != tab_selected[0]:
+                selected = tab_selected[0]
+                widgets[selected]['docked'] = True
             valid_bindings = {ident: data['hwnd'] for ident, data in bindings.items() if ident in widgets and bound_window(ident)}
             next_selected = foreground_selection(valid_bindings, foreground, selected)
             if next_selected != selected:
@@ -463,8 +503,12 @@ def main():
             subprocess.run([sys.executable, str(BASE / 'codex_float.py'), 'on'], check=True)
         return
     if args.command == 'list':
-        for chat in Reader(cli_only=not args.all).snapshot():
-            print(f'{chat["id"]}  {chat["state"]:8}  {chat["title"]}')
+        reader = Reader(cli_only=not args.all, discover=not args.all)
+        try:
+            for chat in reader.snapshot():
+                print(f'{chat["id"]}  {chat["state"]:8}  {chat["title"]}')
+        finally:
+            reader.close()
         return
     current = running()
     command = ('off' if current else 'on') if args.command == 'toggle' else args.command

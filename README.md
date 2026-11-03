@@ -29,7 +29,7 @@ codex-float status
 
 `new` creates a persistent, named conversation through a short-lived local Codex app-server connection, then opens `codex resume <id>` in its own terminal. Creating the conversation does not submit a prompt or model turn. `resume` opens an existing conversation; if its managed terminal is already alive it activates that window instead. A per-session OS lock prevents concurrent managed CLI owners. Launching a session automatically starts the avatars when necessary. `off` stops only the avatars; terminals and agents keep running.
 
-Each managed terminal has a unique fixed title and a dedicated window, so its chat-to-window association is automatic. Keep managed sessions in their dedicated windows; adding or rearranging tabs inside those windows is not tracked.
+Each managed terminal has a unique fixed title and a dedicated window. Existing native CLI clients in Windows Terminal are also discovered automatically, including resumed chats whose saved source still says `vscode`. Each tab receives its own avatar and native tab identifier. Double-click selects the exact tab; changing tabs exchanges the full-size avatar even when both tabs share one window.
 
 - Double-click an avatar to restore its terminal. If its managed CLI has exited, double-click resumes the conversation in a new terminal.
 - The selected avatar is 178x152 pixels; others are 89x76 pixels. Switching foreground between bound terminals exchanges the full-size avatar automatically.
@@ -37,7 +37,7 @@ Each managed terminal has a unique fixed title and a dedicated window, so its ch
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
-For native CLI sessions started with plain `codex`, the lifecycle reader can show activity, but the window is initially unknown. Use the avatar's manual binding option and focus the existing terminal within eight seconds. An unmanaged active turn cannot be automatically resumed into a second CLI.
+Plain `codex` clients are matched using their live process workspaces and terminal footer metadata. The initial scan inspects inactive tabs once after at least two seconds without user input, then restores the originally selected tab. Later polls inspect the selected tab and reuse validated tab associations. The helper returns only workspace/title metadata and tab identifiers, without saving terminal transcripts or input. Ambiguous matches are left unassigned; the manual binding option remains available for other console hosts. Active unmanaged turns cannot be resumed into a second CLI.
 
 ## Continue chats from the desktop app
 
@@ -46,7 +46,7 @@ codex-float list --all
 codex-float resume <session-UUID>
 ```
 
-Wait for the original turn to finish before moving the conversation to the CLI. Desktop chats are hidden from the avatar view until resumed through the launcher. The utility does not close the desktop app or stop its work. WSL sessions in a separate Linux home are not included.
+Wait for the original turn to finish before moving the conversation to the CLI. Desktop chats are hidden until a live CLI client or launcher registration identifies them. The utility does not close the desktop app or stop its work. WSL sessions in a separate Linux home are not included.
 
 ## State and maintenance
 

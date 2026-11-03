@@ -8,9 +8,9 @@ $launcherDirectory = Join-Path $HOME 'bin'
 if (-not (Test-Path -LiteralPath $appPath -PathType Leaf)) {
     throw "Application not found: $appPath"
 }
-& $PythonPath -c 'import tkinter; import PIL'
+& $PythonPath -c 'import tkinter; import PIL; import psutil'
 if ($LASTEXITCODE -ne 0) {
-    throw 'Python needs Tkinter and Pillow. Install requirements.txt using this interpreter.'
+    throw 'Python needs Tkinter, Pillow, and psutil. Install requirements.txt using this interpreter.'
 }
 New-Item -ItemType Directory -Path $launcherDirectory -Force | Out-Null
 & $PythonPath -c 'import sys;sys.path.insert(0,sys.argv[1]);from cli_sessions import cli_executable;print(cli_executable())' $PSScriptRoot

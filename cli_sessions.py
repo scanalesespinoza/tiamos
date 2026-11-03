@@ -64,7 +64,8 @@ class LocalServer:
                 except ValueError:
                     pass
 
-        threading.Thread(target=drain, daemon=True).start()
+        self.reader_thread = threading.Thread(target=drain, daemon=True)
+        self.reader_thread.start()
         try:
             self.call('initialize', {'clientInfo': {'name': 'codex_float', 'version': '0.2.0'}})
             self.send({'method': 'initialized', 'params': {}})
@@ -99,6 +100,8 @@ class LocalServer:
         except subprocess.TimeoutExpired:
             self.process.terminate()
             self.process.wait(timeout=3)
+        self.reader_thread.join(timeout=1)
+        self.process.stdout.close()
 
 
 def create_session(cwd):
@@ -121,6 +124,9 @@ def registrations(state=STATE):
             if isinstance(value, dict) and value.get('id') == path.stem:
                 value['live'] = value.get('running', False) and time.time() - value.get('heartbeat', 0) < 10
                 result[path.stem] = value
+    external = read(state / 'external-cli.json', {})
+    if time.time() - external.get('heartbeat', 0) < 8:
+        result.update(external.get('sessions', {}))
     return result
 
 
@@ -141,11 +147,19 @@ def launch(ident):
     ident = session_id(ident)
     info = thread_info(ident)
     existing = registrations().get(ident)
+    if not existing or not existing['live']:
+        from terminal_discovery import refresh_external
+        refresh_external()
+        existing = registrations().get(ident)
     native = Windows()
     if existing and existing['live']:
         window = native.inspect(existing.get('hwnd'))
-        if window and window.pid == existing.get('window_pid') and existing.get('token') in window.title:
+        tab = existing.get('kind') == 'tab'
+        if window and window.pid == existing.get('window_pid') and (tab or existing.get('token') in window.title):
             native.activate(window)
+            if tab:
+                from terminal_discovery import select_tab
+                select_tab(existing)
         # A live wrapper may still be starting; never launch a second one.
         return ident
     pending_path = STATE / 'cli-launches' / f'{ident}.json'
