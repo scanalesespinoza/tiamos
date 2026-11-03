@@ -1,8 +1,10 @@
 import sys
 import unittest
+import tempfile
 from unittest.mock import Mock
 
 from group_menu import GroupMenu, HistoryPicker
+from agent_sounds import Sounds
 
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows native controls')
@@ -55,6 +57,32 @@ class GroupMenuTests(unittest.TestCase):
         picker.choose()
         selected.assert_called_once_with(record)
         self.assertEqual(picker.window.state(), 'withdrawn')
+
+    def test_sound_menu_controls_persist_and_quiet_disables_preview(self):
+        with tempfile.TemporaryDirectory() as directory:
+            player = Mock()
+            sounds = Sounds(directory, player=player)
+            quiet = [False]
+            group = GroupMenu(self.root, Mock(), {}, lambda: False, set,
+                              Mock(), Mock(), Mock(), Mock(), sounds, lambda: quiet[0])
+            event = Mock(x_root=100, y_root=100)
+            group.popup(event)
+            self.assertEqual(group.menu.entrycget('end', 'label'), 'Sonidos')
+            menu = group.sound_menu
+            menu.menu.invoke(5)
+            self.assertEqual(Sounds(directory, player=player).volume, 50)
+            menu.menu.invoke(0)
+            self.assertFalse(Sounds(directory, player=player).enabled)
+            group.popup(event)
+            self.assertEqual(menu.menu.entrycget(9, 'state'), 'disabled')
+            menu.menu.invoke(0)
+            group.popup(event)
+            menu.menu.invoke(9)
+            self.assertIsNotNone(player.call_args.args[0])
+            quiet[0] = True
+            group.popup(event)
+            self.assertEqual(menu.menu.entrycget(9, 'state'), 'disabled')
+            self.assertEqual(menu.menu.entrycget('end', 'label'), 'Pausados por modo tranquilo')
 
 
 if __name__ == '__main__':

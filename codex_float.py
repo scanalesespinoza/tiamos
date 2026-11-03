@@ -197,6 +197,7 @@ def serve():
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
     from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
+    from agent_sounds import Sounds, SoundEvents, SoundMenu
     from PIL import Image, ImageTk
     import ctypes
     import msvcrt
@@ -219,9 +220,13 @@ def serve():
     identities = load_json(STATE / 'identities.json', {})
     notices = Notices(load_json(STATE / 'notices.json', {}))
     quiet = tk.BooleanVar(value=load_json(STATE / 'preferences.json', {}).get('quiet', False))
+    sounds = Sounds(STATE)
+    sound_events = SoundEvents()
 
     def save_quiet():
         atomic_json(STATE / 'preferences.json', {'quiet': quiet.get()})
+        if quiet.get():
+            sounds.stop()
 
     def acknowledge(ident):
         if notices.acknowledge(ident):
@@ -426,7 +431,7 @@ def serve():
     from group_menu import GroupMenu, HistoryPicker
     history_picker = HistoryPicker(root, history_loader, show_historical, lambda: set(widgets))
     group_menu = GroupMenu(root, details, widgets, lambda: avatars_hidden, lambda: hidden_ids,
-                           toggle_visibility, toggle_one, history_picker.show, today_only)
+                           toggle_visibility, toggle_one, history_picker.show, today_only, sounds, quiet.get)
     position_group()
 
     def worker():
@@ -563,6 +568,8 @@ def serve():
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
         menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
+        sound_menu = SoundMenu(menu, sounds, quiet.get)
+        menu.add_cascade(label='Sonidos', menu=sound_menu.menu)
         menu.add_command(label='Editar colores globales', command=edit_themes)
         menu.add_command(label='Recargar colores', command=lambda: refresh_themes(force=True))
         if hotkeys.labels.get('toggle_visibility'):
@@ -571,6 +578,7 @@ def serve():
         menu.add_command(label='Cerrar menu')
 
         def show_menu(event):
+            sound_menu.refresh()
             return details.popup_menu(menu, event.x_root, event.y_root)
 
         for surface in (window, title, picture, label, badge, xp_bar):
@@ -606,6 +614,9 @@ def serve():
             chats, error = updates.get_nowait()
             last_error = error
             if chats is not None:
+                sound_event = sound_events.observe(chats, time.time())
+                if sound_event and not quiet.get() and not error:
+                    sounds.play(sound_event)
                 changed, celebrations = notices.observe(chats, time.time())
                 if changed:
                     atomic_json(STATE / 'notices.json', notices.records)
@@ -782,6 +793,7 @@ def serve():
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
                 'details': {'session': details.ident, 'pinned': details.pinned, 'profile': details.profile},
                 'quiet': quiet.get(),
+                'sounds': dict(sounds.status(), paused_by_quiet=quiet.get()),
                 'hidden': avatars_hidden,
                 'hidden_avatars': sorted(hidden_ids),
                 'group_menu': {'visible': group_menu.window.state() != 'withdrawn',
@@ -804,6 +816,7 @@ def serve():
         root.mainloop()
     finally:
         stop.set()
+        sounds.stop()
         hotkeys.close()
         lock.close()
 
