@@ -1,6 +1,6 @@
 # Codex CLI + floating avatars
 
-Run native Codex CLI sessions in independent Windows terminal windows with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Each working turn animates a typing terminal; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
+Run native Codex CLI sessions in independent Windows terminal windows with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
 ## Install
 
@@ -39,6 +39,12 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
 ## Understand each session
+
+Each session keeps its own color and accessory across restarts. Companions read a book while exploring, type or hold a pencil while editing, show moving test lights during validation, and hold a wrench after an observed tool error. These gestures describe activity categories, not the agent's thoughts or proof that a task succeeded. A short wave acknowledges explicit terminal selection; dragging produces a small reaction inside the avatar without moving the window by itself.
+
+A newly completed turn gets a three-second celebration and an amber **new result** dot. The dot remains until you open that session's detail card or successfully activate its terminal, including across avatar restarts. A new working turn does not erase an unread prior result. Interrupted turns do not celebrate or create a result notice; neither do startup history or turns whose latest tool reported an error celebrate. A normal completed turn may still require follow-up: the celebration marks the end of the turn, not independently verified success.
+
+Right-click any avatar and enable **Modo tranquilo** to freeze animations and suppress waves/confetti for all companions. Colors, activity captions, result dots, hover cards, dragging, and terminal selection remain available. The setting persists across restarts. There are no sounds or autonomous desktop movement.
 
 Hover over an avatar for a compact detail card without moving keyboard focus away from the terminal. The card shows the project, current objective, working/resting state, turn duration, latest observed activity, and up to three recent tool outcomes. The floating caption summarizes the current observed phase, such as editing, validation, or investigation.
 
@@ -83,7 +89,7 @@ Wait for the original turn to finish before moving the conversation to the CLI. 
 
 The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle and activity events every two seconds. It excludes archived threads and subagents. Only bounded, sanitized objective/progress excerpts are retained in memory for the detail card; command output and reasoning content are not retained. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
 
-Runtime state lives in `%LOCALAPPDATA%/CodexFloat`: positions, window bindings, CLI registrations, per-session locks, heartbeat, and startup errors. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
+Runtime state lives in `%LOCALAPPDATA%/CodexFloat`: positions, window bindings, CLI registrations, per-session locks, heartbeat, startup errors, identity slots, result/acknowledgment timestamps, and the quiet preference. Companion notices store no result text. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
 
 Before relocating, stop avatars and finish managed CLI sessions, move the repository, then rerun `install.ps1`. No login startup is installed. To uninstall, stop avatars and managed sessions, then remove the launcher and checkout.
 

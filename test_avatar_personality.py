@@ -1,0 +1,102 @@
+import copy
+import datetime as dt
+import unittest
+
+from avatar_personality import COLORS, STATES, Notices, identity, render_frames, visual_state
+from session_activity import Activity
+
+
+def chat(finished=None, phase='Turno finalizado', outcome='ok', state='sleeping'):
+    return {'id': 'session', 'state': state, 'activity': {'finished_at': finished,
+        'phase': phase, 'actions': [{'outcome': outcome}]}}
+
+
+class PersonalityTests(unittest.TestCase):
+    def test_identities_survive_restart_and_avoid_collisions_until_palette_is_full(self):
+        registry = {}
+        assigned = [identity(str(n), registry) for n in range(32)]
+        self.assertEqual(len(set(assigned)), 32)
+        restored = dict(registry)
+        self.assertEqual([identity(str(n), restored) for n in reversed(range(32))], list(reversed(assigned)))
+        color, accessory = identity('overflow', restored)
+        self.assertIn(color, COLORS)
+        self.assertIn(accessory, range(4))
+
+    def test_notices_are_persistent_but_historical_results_never_celebrate(self):
+        notices = Notices()
+        self.assertEqual(notices.observe([chat(100)], 101), (True, set()))
+        self.assertTrue(notices.pending('session'))
+        self.assertEqual(notices.observe([chat(100)], 102), (False, set()))
+        restored = Notices(copy.deepcopy(notices.records))
+        self.assertTrue(restored.pending('session'))
+        self.assertTrue(restored.acknowledge('session'))
+        self.assertFalse(restored.acknowledge('session'))
+        self.assertFalse(Notices(copy.deepcopy(restored.records)).pending('session'))
+        self.assertFalse(restored.pending('unknown'))
+
+    def test_new_result_celebrates_once_and_later_work_preserves_unread_result(self):
+        notices = Notices()
+        notices.observe([chat(state='working')], 99)
+        self.assertEqual(notices.observe([chat(100)], 101), (True, {'session'}))
+        self.assertEqual(notices.observe([chat(100)], 102), (False, set()))
+        notices.observe([chat(state='working')], 103)
+        self.assertTrue(notices.pending('session'))
+        notices.acknowledge('session')
+        self.assertEqual(notices.observe([chat(110)], 111), (True, {'session'}))
+        self.assertTrue(notices.pending('session'))
+
+    def test_interrupted_turn_has_no_result_and_error_or_old_completion_does_not_celebrate(self):
+        notices = Notices()
+        notices.observe([], 90)
+        self.assertEqual(notices.observe([chat(100, phase='Turno interrumpido')], 101), (False, set()))
+        self.assertFalse(notices.pending('session'))
+        self.assertEqual(notices.observe([chat(110, outcome='error')], 111), (True, set()))
+        self.assertTrue(notices.pending('session'))
+        self.assertEqual(notices.observe([chat(120)], 200), (True, set()))
+
+    def test_completion_between_polls_is_retained_when_next_turn_has_already_started(self):
+        activity = Activity()
+        def event(kind, stamp, turn):
+            activity.observe({'type': 'event_msg', 'payload': {'type': kind, 'turn_id': turn}},
+                dt.datetime.fromtimestamp(stamp, dt.timezone.utc))
+        notices = Notices()
+        notices.observe([], 90)
+        event('task_started', 99, 'first')
+        event('task_complete', 100, 'first')
+        event('task_started', 101, 'second')
+        self.assertIsNone(activity.finished_at)
+        current = {'id': 'session', 'state': 'working', 'activity': activity.summary()}
+        self.assertEqual(notices.observe([current], 102), (True, set()))
+        self.assertTrue(notices.pending('session'))
+        notices.acknowledge('session')
+        event('turn_aborted', 103, 'second')
+        current['activity'] = activity.summary()
+        self.assertEqual(notices.observe([current], 104), (False, set()))
+        self.assertFalse(notices.pending('session'))
+
+    def test_activity_gestures_do_not_change_lifecycle_or_claim_success(self):
+        for phase, expected in [('Exploración de archivos', 'reading'), ('Inspección visual', 'reading'),
+            ('Revisión de cambios', 'reading'), ('Investigación', 'reading'),
+            ('Edición de archivos', 'editing'), ('Pruebas y validación', 'testing'),
+            ('Compilación', 'testing'), ('Analizando', 'working')]:
+            with self.subTest(phase=phase):
+                self.assertEqual(visual_state(chat(phase=phase, state='working')), expected)
+        self.assertEqual(visual_state(chat(outcome='error', state='working'), greeting=True), 'error')
+        self.assertEqual(visual_state(chat(), celebrating=True), 'celebrating')
+        self.assertEqual(visual_state(chat(), greeting=True), 'greeting')
+        self.assertEqual(visual_state(chat(), carried=True), 'carried')
+        self.assertEqual(visual_state(chat()), 'sleeping')
+
+    def test_all_gestures_render_at_both_sizes_for_each_accessory(self):
+        for accessory in range(4):
+            for state in STATES:
+                with self.subTest(state=state, accessory=accessory):
+                    frames = render_frames(state, COLORS[accessory], accessory)
+                    self.assertEqual(len(frames), 8)
+                    self.assertTrue(all(frame.size == (160, 104) for frame in frames))
+                    self.assertEqual(frames[0].resize((80, 52)).size, (80, 52))
+                    self.assertGreater(len(frames[0].getcolors()), 2)
+
+
+if __name__ == '__main__':
+    unittest.main()

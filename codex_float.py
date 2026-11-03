@@ -171,7 +171,8 @@ class Reader:
 def serve():
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
-    from PIL import Image, ImageTk, ImageSequence
+    from avatar_personality import Notices, identity, render_frames, visual_state
+    from PIL import Image, ImageTk
     import ctypes
     import msvcrt
     # Keep Tk window coordinates aligned with physical pixels on scaled displays.
@@ -190,14 +191,24 @@ def serve():
     root = tk.Tk()
     root.withdraw()
     root.title('Codex Float')
-    frames = {}
-    small_frames = {}
-    for state in ('working', 'sleeping'):
-        # Pillow composites GIF delta frames before Tk displays them.
-        with Image.open(BASE / 'assets' / f'{state}.gif') as animation:
-            images = [frame.convert('RGBA') for frame in ImageSequence.Iterator(animation)]
-            frames[state] = [ImageTk.PhotoImage(frame) for frame in images]
-            small_frames[state] = [ImageTk.PhotoImage(frame.resize((80, 52), Image.Resampling.LANCZOS)) for frame in images]
+    identities = load_json(STATE / 'identities.json', {})
+    notices = Notices(load_json(STATE / 'notices.json', {}))
+    quiet = tk.BooleanVar(value=load_json(STATE / 'preferences.json', {}).get('quiet', False))
+
+    def save_quiet():
+        atomic_json(STATE / 'preferences.json', {'quiet': quiet.get()})
+
+    def acknowledge(ident):
+        if notices.acknowledge(ident):
+            atomic_json(STATE / 'notices.json', notices.records)
+
+    def animation(entry, state):
+        if state not in entry['animations']:
+            images = render_frames(state, entry['accent'], entry['accessory'])
+            entry['animations'][state] = (
+                [ImageTk.PhotoImage(frame) for frame in images],
+                [ImageTk.PhotoImage(frame.resize((80, 52), Image.Resampling.LANCZOS)) for frame in images])
+        return entry['animations'][state]
     positions_path = STATE / 'positions.json'
     positions = load_json(positions_path, {})
     widgets = {}
@@ -264,6 +275,8 @@ def serve():
         selection_epoch = time.time()
         focus_error = None
         widgets[ident]['docked'] = True
+        widgets[ident]['greet_until'] = time.monotonic() + 1.2
+        acknowledge(ident)
         follow_selection = True
 
     def open_chat(ident):
@@ -274,7 +287,9 @@ def serve():
         target = bound_window(ident)
         terminal = entry.get('terminal') or {}
         if target and (bindings.get(ident, {}).get('manual') or terminal.get('live')):
-            native.activate(target)
+            if not native.activate(target):
+                focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
+                return 'break'
             if terminal.get('kind') == 'tab':
                 from terminal_discovery import select_tab
                 try:
@@ -297,7 +312,7 @@ def serve():
         bind_request = (ident, time.monotonic() + 8)
         focus_error = None
 
-    details = DetailsCard(root, widgets, open_chat)
+    details = DetailsCard(root, widgets, open_chat, on_view=acknowledge)
 
     def worker():
         try:
@@ -339,6 +354,10 @@ def serve():
 
     def make_widget(chat):
         ident = chat['id']
+        known_identity = ident in identities
+        accent, accessory = identity(ident, identities)
+        if not known_identity:
+            atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
         window.title('Codex Float - ' + chat['title'])
         window.overrideredirect(True)
@@ -350,14 +369,17 @@ def serve():
         x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE)
         positions.setdefault(ident, [x, y])
         window.geometry(f'{width}x{height}{x:+d}{y:+d}')
-        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg='#e4eaf4', font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
+        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg=accent, font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
         title.pack(fill='x')
-        picture = tk.Label(window, image=small_frames[chat['state']][0], bg='#171d28', borderwidth=0, padx=0, pady=0)
+        picture = tk.Label(window, bg='#171d28', borderwidth=0, padx=0, pady=0)
         picture.pack()
         label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 6), pady=0, padx=0, borderwidth=0)
         label.pack()
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
+        entry.update(accent=accent, accessory=accessory, animations={}, visual=None, celebrate_until=0, greet_until=0)
+        badge = tk.Label(window, text='●', fg='#ffc275', bg='#171d28', font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
+        entry['badge'] = badge
         entry['chat'] = chat
         widgets[ident] = entry
         if ident not in layout_order:
@@ -390,6 +412,7 @@ def serve():
         for anchor, placement_label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
+        menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
         menu.add_command(label='Apagar todos', command=quit_all)
         menu.add_command(label='Cerrar menu')
 
@@ -400,7 +423,7 @@ def serve():
             finally:
                 menu.grab_release()
 
-        for surface in (window, title, picture, label):
+        for surface in (window, title, picture, label, badge):
             surface.bind('<ButtonPress-1>', press)
             surface.bind('<B1-Motion>', move)
             surface.bind('<ButtonRelease-1>', release)
@@ -426,6 +449,9 @@ def serve():
             chats, error = updates.get_nowait()
             last_error = error
             if chats is not None:
+                changed, celebrations = notices.observe(chats, time.time())
+                if changed:
+                    atomic_json(STATE / 'notices.json', notices.records)
                 wanted = {chat['id'] for chat in chats}
                 for ident in list(widgets):
                     if ident not in wanted:
@@ -437,6 +463,8 @@ def serve():
                     if chat['id'] not in widgets:
                         make_widget(chat)
                     entry = widgets[chat['id']]
+                    if chat['id'] in celebrations:
+                        entry['celebrate_until'] = time.monotonic() + 3
                     if entry['state'] != chat['state']:
                         entry['frame'] = 0
                     entry['state'] = chat['state']
@@ -471,8 +499,10 @@ def serve():
                 focus_error = 'No se encontro la terminal de Codex'
             elif bound_window(ident):
                 target = bound_window(ident)
-                native.activate(target)
-                associate(ident, target)
+                if native.activate(target):
+                    associate(ident, target)
+                else:
+                    focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
                 pending = None
         valid_bindings = {}
         for ident, entry in widgets.items():
@@ -512,7 +542,14 @@ def serve():
                 elif not active:
                     x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
-            entry['title'].configure(text=entry['chat_title'][:25 if full else 12])
+            unread = notices.pending(ident)
+            entry['title'].configure(text=entry['chat_title'][:(22 if full else 10) if unread else (25 if full else 12)])
+            if unread:
+                entry['badge'].configure(font=('Segoe UI', 9 if full else 7))
+                entry['badge'].place(relx=1, x=-3, y=3 if full else 0, anchor='ne')
+                entry['badge'].lift()
+            else:
+                entry['badge'].place_forget()
             host = bound_window(ident)
             entry['minimized'] = bool(host and host.minimized)
             entry['window'].configure(highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if active else '#46536b')
@@ -534,17 +571,26 @@ def serve():
             if entry['window'].state() == 'withdrawn':
                 entry['window'].deiconify()
             state = entry['state']
-            if state == 'working' or tick_number % 2 == 0:
-                entry['frame'] = (entry['frame'] + 1) % len(frames[state])
-            entry['picture'].configure(image=(frames if full else small_frames)[state][entry['frame']])
+            now = time.monotonic()
+            celebrating = now < entry['celebrate_until'] and not quiet.get() and not last_error
+            visual = visual_state(entry['chat'], celebrating=celebrating,
+                greeting=now < entry['greet_until'] and not quiet.get(), carried=bool(entry['drag']) and not quiet.get())
+            if visual != entry['visual'] or quiet.get() or last_error:
+                entry['frame'] = 0
+            elif state == 'working' or tick_number % 2 == 0:
+                entry['frame'] = (entry['frame'] + 1) % 8
+            entry['visual'] = visual
+            entry['picture'].configure(image=animation(entry, visual)[0 if full else 1][entry['frame']])
             caption = compact_caption(entry['chat'], full)
+            if state != 'working' and unread:
+                caption = '¡Turno listo!' if celebrating else 'Resultado nuevo' if full else 'Nuevo'
             if pending and pending[0] == ident:
                 caption = 'Abriendo...'
             if bind_request and bind_request[0] == ident:
                 caption = 'Elige ventana'
             if entry.get('terminal') and not entry['terminal'].get('live'):
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
-            entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
+            entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error or unread else entry['accent'] if state == 'working' else '#aab8d5')
         position_group()
         if tick_number % 2 == 0:
             details.reconcile_pointer()
@@ -564,6 +610,9 @@ def serve():
                 'minimized': {ident: v.get('minimized', False) for ident, v in widgets.items()},
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
                 'details': {'session': details.ident, 'pinned': details.pinned},
+                'quiet': quiet.get(),
+                'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
+                    'visual': v['visual'], 'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
                 'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)
                     for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count')} for ident, v in widgets.items()},
             })
