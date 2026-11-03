@@ -1,6 +1,6 @@
 # Codex and Claude CLI floating avatars
 
-Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a soft blue background; Claude companions have a soft orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
+Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
 ## Install
 
@@ -37,6 +37,25 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 - The selected avatar follows the upper-right client area below the title-bar controls. Avatars stay visible when their terminal is minimized, keeping their last on-screen position and showing a gray border. Double-click restores the terminal; the selected avatar resumes docking after restoration. Avatars also remain available on the desktop after the terminal closes.
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
+
+## Colors and live refresh
+
+Provider colors are stored in `%LOCALAPPDATA%\CodexFloat\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.
+
+```powershell
+codex-float theme codex --background "#24364b"
+codex-float theme claude --background "#493326"
+codex-float theme codex --foreground "#f1f5f9" --notice "#ffd18a"
+codex-float theme codex --foreground auto --notice auto
+codex-float theme edit
+codex-float refresh
+codex-float theme show
+codex-float theme reset
+```
+
+`theme edit` opens the JSON file in Notepad. Right-click any avatar for **Editar colores globales** or **Recargar colores**. Saved changes reload automatically in about one second, including sprites at both sizes, text, and unread badges. No avatar or CLI restart is needed, and placement, selection, visibility, and personality remain intact. `refresh` validates the file and confirms the running app has applied the palette; when avatars are off, it prepares colors for the next start. `theme reset` restores dark defaults for both providers.
+
+The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `codex-float status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
 
 ## Understand each session
 

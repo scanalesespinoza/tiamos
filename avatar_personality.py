@@ -2,6 +2,7 @@
 import hashlib
 import math
 from PIL import Image, ImageDraw
+from avatar_theme import palettes
 
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
 COLOR_NAMES = ('Menta', 'Azul', 'Lila', 'Ámbar', 'Rosa', 'Lima', 'Turquesa', 'Arena')
@@ -10,8 +11,8 @@ STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'error', 'sleep
 
 
 def provider_theme(provider):
-    return {'name': 'Claude', 'background': '#dfc2a8', 'foreground': '#75421f'} if provider == 'claude' else {
-        'name': 'Codex', 'background': '#b8cce3', 'foreground': '#25496b'}
+    themes = palettes({})
+    return themes.get(provider, themes['codex'])
 
 
 def identity(ident, registry):

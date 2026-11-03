@@ -16,6 +16,7 @@ from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_positi
 from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
 from session_activity import Activity, safe_preview
+from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
 
 BASE = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
@@ -182,7 +183,7 @@ class Reader:
 def serve():
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
-    from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, provider_theme, render_frames, visual_state
+    from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
     from PIL import Image, ImageTk
     import ctypes
     import msvcrt
@@ -223,6 +224,23 @@ def serve():
     positions_path = STATE / 'positions.json'
     positions = load_json(positions_path, {})
     widgets = {}
+    themes = ThemeSettings(STATE / 'themes.json')
+
+    def refresh_themes(force=False):
+        if themes.reload(force):
+            for entry in widgets.values():
+                theme = themes.get(entry['chat'].get('provider'))
+                entry['theme'] = theme
+                for surface in ('window', 'title', 'picture', 'label', 'badge'):
+                    entry[surface].configure(bg=theme['background'])
+                entry['title'].configure(fg=theme['foreground'])
+                entry['label'].configure(fg=theme['foreground'])
+                entry['badge'].configure(fg=theme['notice'])
+                entry['animations'].clear()
+                entry['frame'] = 0
+                visual = entry['visual'] or visual_state(entry['chat'])
+                entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
+
     updates = queue.Queue(maxsize=1)
     stop = threading.Event()
     reader = Reader(cli_only=True, discover=True)
@@ -386,7 +404,7 @@ def serve():
         ident = chat['id']
         known_identity = ident in identities
         accent, accessory = identity(ident, identities)
-        theme = provider_theme(chat.get('provider'))
+        theme = themes.get(chat.get('provider'))
         if not known_identity:
             atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
@@ -410,7 +428,7 @@ def serve():
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
         entry.update(accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
-        badge = tk.Label(window, text='●', fg='#8b4e00', bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
+        badge = tk.Label(window, text='●', fg=theme['notice'], bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
         entry['badge'] = badge
         entry['chat'] = chat
         widgets[ident] = entry
@@ -451,7 +469,7 @@ def serve():
             color_choice.set(COLORS.index(accent))
             accessory_choice.set(accessory)
             entry.update(accent=accent, accessory=accessory, frame=0)
-            entry['title'].configure(fg=theme['foreground'])
+            entry['title'].configure(fg=entry['theme']['foreground'])
             entry['animations'].clear()
             visual = entry['visual'] or visual_state(entry['chat'])
             entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
@@ -472,6 +490,8 @@ def serve():
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
         menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
+        menu.add_command(label='Editar colores globales', command=edit_themes)
+        menu.add_command(label='Recargar colores', command=lambda: refresh_themes(force=True))
         if hotkeys.labels.get('toggle_visibility'):
             menu.add_command(label='Ocultar avatares', accelerator=hotkeys.labels['toggle_visibility'], command=toggle_visibility)
         menu.add_command(label='Apagar todos', command=quit_all)
@@ -497,6 +517,8 @@ def serve():
 
     def tick():
         nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
+        if tick_number % 10 == 0:
+            refresh_themes()
         if (STATE / 'stop').exists():
             (STATE / 'stop').unlink(missing_ok=True)
             quit_all()
@@ -658,7 +680,7 @@ def serve():
             if entry.get('terminal') and not entry['terminal'].get('live'):
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption,
-                fg='#754000' if last_error or unread else entry['theme']['foreground'])
+                fg=entry['theme']['notice'] if last_error or unread else entry['theme']['foreground'])
         position_group()
         if not avatars_hidden and tick_number % 2 == 0:
             details.reconcile_pointer()
@@ -680,6 +702,8 @@ def serve():
                 'details': {'session': details.ident, 'pinned': details.pinned},
                 'quiet': quiet.get(),
                 'hidden': avatars_hidden,
+                'themes': themes.themes, 'theme_error': themes.error,
+                'theme_file': str(themes.path),
                 'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
                     'provider': v['chat'].get('provider', 'codex'), 'background': v['theme']['background'],
                     'visual': v['visual'], 'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
@@ -699,12 +723,70 @@ def serve():
         lock.close()
 
 
+def edit_themes():
+    path = STATE / 'themes.json'
+    if not path.exists():
+        write_config(path, DEFAULTS)
+    subprocess.Popen(['notepad.exe', str(path)])
+
+
+def theme_command(args, parser):
+    path = STATE / 'themes.json'
+    target = args.target or 'show'
+    if target not in ('codex', 'claude', 'show', 'edit', 'reset'):
+        parser.error('Usa theme codex|claude|show|edit|reset.')
+    if target not in DEFAULTS and any((args.background, args.foreground, args.notice)):
+        parser.error('Los colores requieren theme codex o theme claude.')
+    if target == 'edit':
+        edit_themes()
+        return
+    config = {} if target == 'reset' else read_config(path)
+    if target in DEFAULTS:
+        options = config.setdefault(target, {})
+        for field in ('background', 'foreground', 'notice'):
+            value = getattr(args, field)
+            if value == 'auto' and field != 'background':
+                options.pop(field, None)
+            elif value is not None:
+                options[field] = value
+        write_config(path, config)
+    elif target == 'reset':
+        write_config(path, DEFAULTS)
+        config = DEFAULTS
+    print(str(path))
+    print(json.dumps(palettes(config), indent=2))
+    print('Los cambios se aplican automaticamente en aproximadamente 1 segundo si los avatares estan encendidos.')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Terminales Codex CLI y avatares flotantes de hoy.')
-    parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list'])
+    parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list', 'theme', 'refresh'])
     parser.add_argument('target', nargs='?', help='Carpeta para new; UUID de sesion para resume.')
     parser.add_argument('--all', action='store_true', help='Incluye chats de la app en list para migrarlos al CLI.')
+    parser.add_argument('--background', help='Fondo del proveedor en #RRGGBB (theme).')
+    parser.add_argument('--foreground', help='Texto en #RRGGBB o auto (theme).')
+    parser.add_argument('--notice', help='Avisos en #RRGGBB o auto (theme).')
     args = parser.parse_args()
+    if args.command in ('theme', 'refresh'):
+        try:
+            if args.command == 'theme':
+                theme_command(args, parser)
+            else:
+                config = read_config(STATE / 'themes.json')
+                write_config(STATE / 'themes.json', config)
+                if not running():
+                    print('Colores validados. Se aplicaran al ejecutar codex-float on.')
+                    return
+                for _ in range(50):
+                    status = running() or {}
+                    if status.get('themes') == palettes(config) and not status.get('theme_error'):
+                        print('Colores recargados sin reiniciar los avatares.')
+                        return
+                    time.sleep(.1)
+                raise ValueError('No se pudo confirmar la recarga. Consulta codex-float status.')
+        except (OSError, ValueError) as error:
+            raise SystemExit(str(error))
+        return
     if args.command == 'serve':
         serve()
         return
