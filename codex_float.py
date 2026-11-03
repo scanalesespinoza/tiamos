@@ -428,23 +428,25 @@ def serve():
                     x, y = clamp(*positions[ident], desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
             entry['title'].configure(text=entry['chat_title'][:25 if full else 12])
-            entry['window'].configure(highlightbackground='#77e4c8' if full else '#46536b')
+            host = bound_window(ident)
+            entry['minimized'] = bool(host and host.minimized)
+            entry['window'].configure(highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if full else '#46536b')
             if full and entry['docked']:
-                host = bound_window(ident)
                 location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
                 if location:
-                    if entry['window'].state() == 'withdrawn':
-                        entry['window'].deiconify()
                     entry['window'].geometry(f'{location[0]:+d}{location[1]:+d}')
                 elif host:
-                    entry['window'].withdraw()
+                    # Minimized client coordinates are off-screen. Keep the last
+                    # visible position while retaining docking for restoration.
+                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
+                    entry['window'].geometry(f'{x:+d}{y:+d}')
                 else:
                     # Keep a closed terminal's avatar clickable for resume.
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
                     entry['window'].deiconify()
-            elif entry['window'].state() == 'withdrawn':
+            if entry['window'].state() == 'withdrawn':
                 entry['window'].deiconify()
             state = entry['state']
             if state == 'working' or tick_number % 2 == 0:
@@ -467,6 +469,7 @@ def serve():
                 'sizes': {ident: list(v['size']) for ident, v in widgets.items()},
                 'docked': {ident: v['docked'] for ident, v in widgets.items()},
                 'visible': {ident: v['window'].state() != 'withdrawn' for ident, v in widgets.items()},
+                'minimized': {ident: v.get('minimized', False) for ident, v in widgets.items()},
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
             })
         tick_number += 1
