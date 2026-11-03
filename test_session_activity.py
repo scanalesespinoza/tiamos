@@ -164,6 +164,19 @@ class ActivityTests(unittest.TestCase):
         left_anchor = (12, 494, 178, 152)
         self.assertEqual(card_position(left_anchor, (382, 562), area)[0], 200)
 
+    def test_card_preserves_controls_during_resize_unless_space_requires_move(self):
+        anchor = (1730, 494, 178, 152)
+        area = (0, 0, 1920, 1140)
+        first = card_position(anchor, (382, 562), area)
+        self.assertEqual(card_position(anchor, (382, 620), area, preferred=first), first)
+        self.assertEqual(card_position(anchor, (382, 400), area, preferred=first), first)
+        constrained = card_position(anchor, (382, 620), (0, 0, 1920, 700), preferred=first)
+        self.assertNotEqual(constrained, first)
+        self.assertLessEqual(constrained[1] + 620, 700)
+        blocked = card_position(anchor, (382, 400), area, preferred=first,
+            obstacles=[(*first, 382, 400)])
+        self.assertNotEqual(blocked, first)
+
 
 if __name__ == '__main__':
     unittest.main()
