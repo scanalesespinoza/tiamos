@@ -4,6 +4,8 @@ import math
 from PIL import Image, ImageDraw
 
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
+COLOR_NAMES = ('Menta', 'Azul', 'Lila', 'Ámbar', 'Rosa', 'Lima', 'Turquesa', 'Arena')
+ACCESSORIES = ('Antena', 'Auriculares', 'Orejas', 'Gorra')
 STATES = ('working', 'reading', 'editing', 'testing', 'error', 'sleeping', 'celebrating', 'greeting', 'carried')
 
 
@@ -14,6 +16,19 @@ def identity(ident, registry):
         registry[ident] = next((slot for offset in range(32) if (slot := (start + offset) % 32) not in used), start)
     slot = int(registry[ident]) % 32
     return COLORS[slot % len(COLORS)], slot // len(COLORS)
+
+
+def customize(ident, registry, color=None, accessory=None, reset=False):
+    if reset:
+        registry.pop(ident, None)
+        return identity(ident, registry)
+    current_color, current_accessory = identity(ident, registry)
+    color = COLORS.index(current_color) if color is None else color
+    accessory = current_accessory if accessory is None else accessory
+    if color not in range(len(COLORS)) or accessory not in range(len(ACCESSORIES)):
+        raise ValueError('Unknown companion appearance')
+    registry[ident] = accessory * len(COLORS) + color
+    return identity(ident, registry)
 
 
 def visual_state(chat, celebrating=False, greeting=False, carried=False):
