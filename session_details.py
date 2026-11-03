@@ -25,6 +25,8 @@ def details_text(chat, now=None):
         state += ' · terminal minimizada'
     started = activity.get('started_at')
     finished = activity.get('finished_at')
+    if not working and finished and terminal.get('live'):
+        state += ' · turno interrumpido' if activity.get('phase') == 'Turno interrumpido' else ' · turno terminado'
     duration = ''
     if started:
         end = now if working else finished
@@ -42,14 +44,18 @@ def details_text(chat, now=None):
         lines.append(duration)
     count = activity.get('action_count', 0)
     if count:
-        lines.append(f'{count} acciones observadas en el último turno')
+        lines.append(f"{count} acciones observadas en {'este' if working else 'el último'} turno")
     actions = []
     for action in activity.get('actions', [])[:3]:
         mark = {'ok': '✓', 'error': '!', 'info': '·'}.get(action.get('outcome'), '·')
         actions.append(f"{mark} {action['label']} · hace {time_text(now - action['at'])}")
     report = activity.get('progress') if working else activity.get('final') or activity.get('progress')
+    latest = (activity.get('actions') or [{}])[0]
+    alert = ''
+    if latest.get('outcome') == 'error':
+        alert = 'La última herramienta informó un error.' + (' La sesión sigue trabajando.' if working else '')
     return {'state': state, 'activity': '\n'.join(lines), 'actions': '\n'.join(actions),
-        'objective': activity.get('objective') or '', 'report': report or '',
+        'objective': activity.get('objective') or '', 'report': report or '', 'alert': alert,
         'report_title': 'Último avance comunicado' if working or not activity.get('final') else 'Último resultado comunicado'}
 
 
@@ -95,15 +101,19 @@ class DetailsCard:
         self.labels['project'] = tk.Label(header, bg='#111925', fg='#77e4c8', font=('Segoe UI Semibold', 10),
             anchor='w', justify='left', wraplength=240)
         self.labels['project'].pack(side='left', fill='x', expand=True)
-        for name, color, font in [('title', '#eef3fb', ('Segoe UI Semibold', 11)),
+        content = tk.Frame(self.body, bg='#111925')
+        content.pack(fill='x')
+        content.columnconfigure(0, weight=1)
+        for row, (name, color, font) in enumerate([('title', '#eef3fb', ('Segoe UI Semibold', 11)),
             ('state', '#77e4c8', ('Segoe UI', 9)), ('objective_title', '#869bb2', ('Segoe UI', 8)),
             ('objective', '#e0e8f3', ('Segoe UI', 9)), ('activity_title', '#869bb2', ('Segoe UI', 8)),
-            ('activity', '#c3d3e5', ('Segoe UI', 9)), ('actions', '#c3d3e5', ('Segoe UI', 9)),
-            ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9))]:
-            widget = tk.Label(self.body, bg='#111925', fg=color, font=font, anchor='w',
+            ('activity', '#c3d3e5', ('Segoe UI', 9)), ('alert', '#f0bd75', ('Segoe UI', 9)),
+            ('actions', '#c3d3e5', ('Segoe UI', 9)),
+            ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9))]):
+            widget = tk.Label(content, bg='#111925', fg=color, font=font, anchor='w',
                 justify='left', wraplength=350, borderwidth=0)
             self.labels[name] = widget
-            widget.pack(fill='x', pady=(8 if name.endswith('_title') or name == 'title' else 3, 0))
+            widget.grid(row=row, column=0, sticky='ew', pady=(8 if name.endswith('_title') or name == 'title' else 3, 0))
         tk.Button(self.body, text='Ir a la terminal ↗', command=self.activate, takefocus=False,
             bg='#223347', fg='#d9eee8', activebackground='#34516a', activeforeground='white',
             relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5).pack(fill='x', pady=(12, 0))
@@ -212,6 +222,8 @@ class DetailsCard:
             self.signature = signature
             for name, label in self.labels.items():
                 label.configure(text=fields.get(name, ''))
+                if name != 'project':
+                    label.grid() if fields.get(name) else label.grid_remove()
         self.window.update_idletasks()
         owner = entry['window']
         from avatar_layout import monitor_work_area

@@ -71,6 +71,31 @@ class ActivityTests(unittest.TestCase):
         self.assertLessEqual(len(safe_preview('a ' * 300)), 180)
         self.assertNotIn('\u202e', safe_preview('example\u202etext'))
 
+    def test_code_blocks_and_inline_commands_are_omitted_from_prose(self):
+        preview = safe_preview('Validate the change with `python private_script.py`.\n```powershell\nPRIVATE COMMAND\n```\nThen review the result.')
+        self.assertNotIn('private_script', preview)
+        self.assertNotIn('PRIVATE COMMAND', preview)
+        self.assertIn('Validate the change', preview)
+        self.assertIn('Then review the result', preview)
+        self.assertNotIn('PRIVATE', safe_preview('Before ```bash\nPRIVATE unfinished block'))
+
+    def test_loop_feature_requests_are_not_mistaken_for_continuation(self):
+        self.assertFalse(is_control_request('Loop animations should stay smooth'))
+        self.assertFalse(is_control_request('Continue improving the messages'))
+        self.assertTrue(is_control_request('/loop 30s check status'))
+        self.assertTrue(is_control_request('$adev'))
+
+    def test_latest_error_is_contextual_and_clears_after_a_success(self):
+        chat = {'state': 'working', 'activity': {'actions': [{'label': 'Pruebas y validación',
+            'at': 100, 'outcome': 'error'}]}}
+        detail = details_text(chat, 110)
+        self.assertIn('error', detail['alert'])
+        self.assertIn('sigue trabajando', detail['alert'])
+        chat['activity']['actions'].insert(0, {'label': 'Edición de archivos', 'at': 105, 'outcome': 'ok'})
+        detail = details_text(chat, 110)
+        self.assertFalse(detail['alert'])
+        self.assertIn('! Pruebas', detail['actions'])
+
     def test_trace_partial_record_and_truncation_reset_activity(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'rollout.jsonl'
