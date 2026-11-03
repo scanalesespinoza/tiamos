@@ -89,6 +89,7 @@ class Activity:
         self.turn_id = None
         self.last_completed_at = None
         self.last_completion_error = False
+        self.last_result = ''
 
     def add_action(self, label, stamp, outcome='info', ident=None):
         if ident and ident in self.seen:
@@ -123,6 +124,7 @@ class Activity:
                 if self.phase == 'Turno finalizado':
                     self.last_completed_at = self.finished_at
                     self.last_completion_error = bool(self.actions and self.actions[0]['outcome'] == 'error')
+                    self.last_result = self.final
                 self.updated_at = stamp.timestamp()
             elif event == 'user_message':
                 message = payload.get('message', '')
@@ -147,6 +149,8 @@ class Activity:
                         self.progress = text
                     elif item.get('phase') == 'final':
                         self.final = text
+                        if self.phase == 'Turno finalizado':
+                            self.last_result = text
                     self.updated_at = stamp.timestamp()
                 elif item_kind in {'CommandExecution', 'FileChange', 'McpToolCall', 'ImageView', 'Extension'}:
                     label = {'FileChange': 'Edición de archivos', 'ImageView': 'Inspección visual', 'Extension': 'Investigación'}.get(item_kind)
@@ -177,4 +181,5 @@ class Activity:
         return {'objective': self.objective, 'progress': self.progress, 'final': self.final,
             'phase': self.phase, 'started_at': self.started_at, 'finished_at': self.finished_at,
             'last_completed_at': self.last_completed_at, 'last_completion_error': self.last_completion_error,
+            'last_result': self.last_result,
             'updated_at': self.updated_at, 'action_count': self.count, 'actions': list(self.actions)}

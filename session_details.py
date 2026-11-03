@@ -82,8 +82,13 @@ def details_text(chat, now=None):
         alert = 'La última herramienta informó un error.' + (' La sesión sigue trabajando.' if working else '')
     if unavailable:
         alert = 'No se pudo actualizar la sesión. Los detalles pueden estar desactualizados.'
+    previous_result = ''
+    if started and activity.get('last_completed_at') and activity['last_completed_at'] < started:
+        previous_result = activity.get('last_result') or 'El turno anterior terminó sin un resumen final disponible. Consulta la terminal.'
     return {'state': state, 'activity': '\n'.join(lines), 'actions': '\n'.join(actions),
         'objective': activity.get('objective') or '', 'report': report or '', 'alert': alert,
+        'previous_title': 'Resultado comunicado en el turno anterior' if previous_result else '',
+        'previous_result': previous_result,
         'report_title': 'Último avance comunicado' if working or not activity.get('final') else 'Último resultado comunicado'}
 
 
@@ -140,7 +145,8 @@ class DetailsCard:
             ('objective', '#e0e8f3', ('Segoe UI', 9)), ('activity_title', '#869bb2', ('Segoe UI', 8)),
             ('activity', '#c3d3e5', ('Segoe UI', 9)), ('alert', '#f0bd75', ('Segoe UI', 9)),
             ('actions', '#c3d3e5', ('Segoe UI', 9)),
-            ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9))]):
+            ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9)),
+            ('previous_title', '#869bb2', ('Segoe UI', 8)), ('previous_result', '#c3d3e5', ('Segoe UI', 9))]):
             widget = tk.Label(content, bg='#111925', fg=color, font=font, anchor='w',
                 justify='left', wraplength=350, borderwidth=0)
             self.labels[name] = widget
