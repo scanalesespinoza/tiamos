@@ -2,6 +2,7 @@
 import time
 from session_activity import safe_preview, time_text
 from session_metrics import profile_text
+from profile_charts import ProfileChart
 
 
 def card_position(anchor, size, area, gap=10, obstacles=(), preferred=None):
@@ -125,6 +126,7 @@ class DetailsCard:
         self.placement_context = None
         self.location = None
         self.profile = False
+        self.graphical = True
         self.window = tk.Toplevel(root)
         self.window.withdraw()
         self.window.title('Codex Float · Detalles')
@@ -163,14 +165,18 @@ class DetailsCard:
                 justify='left', wraplength=350, borderwidth=0)
             self.labels[name] = widget
             widget.grid(row=row, column=0, sticky='ew', pady=(8 if name.endswith('_title') or name == 'title' else 3, 0))
+        self.chart = ProfileChart(content)
         footer = tk.Frame(self.body, bg='#111925')
         footer.pack(fill='x', pady=(12, 0))
         self.profile_button = tk.Button(footer, text='Perfil · XP', command=self.toggle_profile, takefocus=False,
             bg='#223347', fg='#d9eee8', relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5)
         self.profile_button.pack(side='left', padx=(0, 8))
-        tk.Button(footer, text='Ir a la terminal ↗', command=self.activate, takefocus=False,
+        self.graph_button = tk.Button(footer, text='Cifras', command=self.toggle_charts, takefocus=False,
+            bg='#223347', fg='#d9eee8', relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5)
+        self.terminal_button = tk.Button(footer, text='Ir a la terminal ↗', command=self.activate, takefocus=False,
             bg='#223347', fg='#d9eee8', activebackground='#34516a', activeforeground='white',
-            relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5).pack(side='left', fill='x', expand=True)
+            relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5)
+        self.terminal_button.pack(side='left', fill='x', expand=True)
         self.window.bind('<Enter>', lambda event: self.cancel_leave())
         self.window.bind('<Leave>', lambda event: self.leave())
         self.window.bind('<Escape>', lambda event: self.hide())
@@ -283,6 +289,14 @@ class DetailsCard:
         self.ident, self.pinned = None, False
         self.window.withdraw()
 
+    def toggle_charts(self):
+        self.cancel_request()
+        self.cancel_leave()
+        self.pinned = True
+        self.graphical = not self.graphical
+        self.signature = None
+        self.refresh()
+
     def activate(self):
         ident = self.ident
         self.hide()
@@ -310,8 +324,20 @@ class DetailsCard:
         if self.profile:
             fields = {key: fields[key] for key in ('project', 'title', 'state')}
             fields.update(profile_text((chat.get('activity') or {}).get('stats')))
+            self.graph_button.configure(text='Cifras' if self.graphical else 'Gráfica')
+            self.graph_button.pack(side='left', padx=(0, 8), before=self.terminal_button)
+            if self.graphical:
+                for key in ('profile_today', 'profile_quality', 'profile_history'):
+                    fields.pop(key, None)
             if chat['unavailable']:
                 fields['profile_note'] = 'Sin conexión: estadísticas de la última lectura.\n' + fields['profile_note']
+        else:
+            self.graph_button.pack_forget()
+        if self.profile and self.graphical:
+            self.chart.canvas.grid(row=13, column=0, sticky='ew', pady=(3, 0))
+            self.chart.update((chat.get('activity') or {}).get('stats'), entry.get('accent', '#77e4c8'))
+        else:
+            self.chart.canvas.grid_remove()
         self.profile_button.configure(text='Actividad' if self.profile else 'Perfil · XP')
         signature = tuple(fields.items())
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
