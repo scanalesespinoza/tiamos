@@ -14,6 +14,7 @@ import threading
 import time
 from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
+from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
 
 BASE = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
@@ -205,6 +206,39 @@ def serve():
     bind_request = None
     focus_error = None
     selection_epoch = 0
+    layout_path = STATE / 'layout.json'
+    layout = load_json(layout_path, {'mode': 'top', 'manual': [], 'order': []})
+    if layout.get('mode') not in ('top', 'right', 'left'):
+        layout['mode'] = 'top'
+    manual_ids = set(layout.get('manual', []))
+    layout_order = list(layout.get('order', []))
+    layout_area = monitor_work_area()
+    follow_selection = False
+    hotkeys = GlobalHotkeys()
+
+    def save_layout():
+        layout.update(manual=sorted(manual_ids), order=layout_order)
+        atomic_json(layout_path, layout)
+
+    def apply_layout(anchor):
+        nonlocal layout_area, follow_selection
+        layout['mode'] = anchor
+        layout_area = monitor_work_area()
+        follow_selection = False
+        manual_ids.difference_update(widgets)
+        for entry in widgets.values():
+            entry['manual'] = False
+            entry['docked'] = False
+        save_layout()
+
+    def position_group():
+        items = [(ident, *widgets[ident]['size']) for ident in layout_order
+            if ident in widgets and not widgets[ident]['manual'] and not widgets[ident]['docked']]
+        for ident, (x, y) in arrange(items, layout_area, layout['mode']).items():
+            window = widgets[ident]['window']
+            if (window.winfo_x(), window.winfo_y()) != (x, y):
+                window.geometry(f'{x:+d}{y:+d}')
+            positions[ident] = [x, y]
 
     def bound_window(ident):
         binding = bindings.get(ident)
@@ -215,13 +249,14 @@ def serve():
         return None
 
     def associate(ident, window, manual=False):
-        nonlocal selected, focus_error, selection_epoch
+        nonlocal selected, focus_error, selection_epoch, follow_selection
         bindings[ident] = {'hwnd': window.hwnd, 'pid': window.pid, 'executable': window.executable, 'manual': manual}
         atomic_json(bindings_path, bindings)
         selected = ident
         selection_epoch = time.time()
         focus_error = None
         widgets[ident]['docked'] = True
+        follow_selection = True
 
     def open_chat(ident):
         nonlocal pending, selected, focus_error
@@ -285,6 +320,7 @@ def serve():
 
     def quit_all():
         stop.set()
+        hotkeys.close()
         for ident, entry in widgets.items():
             save_position(ident, entry['window'])
         atomic_json(STATE / 'status.json', {'heartbeat': 0, 'running': False})
@@ -299,21 +335,22 @@ def serve():
         window.configure(bg='#171d28', highlightbackground='#46536b', highlightthickness=1)
         window.attributes('-alpha', .95)
         width, height = HALF_SIZE
-        _, _, screen_w, screen_h = bounds()
-        index = len(widgets)
-        location = positions.get(ident, [root.winfo_screenwidth() - 198 - (index // 5) * 190, 70 + (index % 5) * 164])
+        location = positions.get(ident, [layout_area[0] + 12, layout_area[1] + 12])
         x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE)
         positions.setdefault(ident, [x, y])
         window.geometry(f'{width}x{height}{x:+d}{y:+d}')
-        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg='#e4eaf4', font=('Segoe UI', 6), anchor='center', pady=0)
+        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg='#e4eaf4', font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
         title.pack(fill='x')
-        picture = tk.Label(window, image=small_frames[chat['state']][0], bg='#171d28', borderwidth=0)
+        picture = tk.Label(window, image=small_frames[chat['state']][0], bg='#171d28', borderwidth=0, padx=0, pady=0)
         picture.pack()
-        label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 6), pady=0)
+        label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 6), pady=0, padx=0, borderwidth=0)
         label.pack()
         drag = {}
-        entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title']}
+        entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
         widgets[ident] = entry
+        if ident not in layout_order:
+            layout_order.append(ident)
+            save_layout()
 
         def press(event):
             drag.update(x=event.x_root - window.winfo_x(), y=event.y_root - window.winfo_y())
@@ -321,16 +358,23 @@ def serve():
         def move(event):
             if drag:
                 entry['docked'] = False
+                entry['manual'] = True
+                manual_ids.add(ident)
                 x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'], entry['size'])
                 window.geometry(f'{x:+d}{y:+d}')
 
         def release(event):
             save_position(ident, window)
+            if entry['manual']:
+                save_layout()
             drag.clear()
 
         menu = tk.Menu(window, tearoff=False)
         menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
+        menu.add_separator()
+        for anchor, placement_label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
+            menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
         menu.add_command(label='Apagar todos', command=quit_all)
         menu.add_command(label='Cerrar menu')
@@ -349,6 +393,11 @@ def serve():
             (STATE / 'stop').unlink(missing_ok=True)
             quit_all()
             return
+        while True:
+            try:
+                apply_layout(hotkeys.events.get_nowait())
+            except queue.Empty:
+                break
         try:
             chats, error = updates.get_nowait()
             last_error = error
@@ -415,12 +464,14 @@ def serve():
         next_selected = foreground_selection(valid_bindings, foreground, selected)
         if next_selected != selected:
             selected = next_selected
-            if selected in widgets:
+            if selected in widgets and follow_selection:
                 widgets[selected]['docked'] = True
         for ident, entry in widgets.items():
             desired = avatar_size(ident, selected)
             full = desired == FULL_SIZE
             active = ident == selected
+            if not active:
+                entry['docked'] = False
             if entry['size'] != desired:
                 entry['size'] = desired
                 entry['window'].geometry(f'{desired[0]}x{desired[1]}')
@@ -467,12 +518,15 @@ def serve():
             if entry.get('terminal') and not entry['terminal'].get('live'):
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
+        position_group()
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
                 'chats': len(widgets),
                 'working': sum(v['state'] == 'working' for v in widgets.values()),
                 'error': last_error, 'focus_error': focus_error, 'selected': selected,
+                'layout': layout['mode'], 'layout_area': list(layout_area),
+                'hotkeys': hotkeys.labels, 'hotkey_error': hotkeys.error,
                 'sizes': {ident: list(v['size']) for ident, v in widgets.items()},
                 'docked': {ident: v['docked'] for ident, v in widgets.items()},
                 'visible': {ident: v['window'].state() != 'withdrawn' for ident, v in widgets.items()},
@@ -488,6 +542,7 @@ def serve():
         root.mainloop()
     finally:
         stop.set()
+        hotkeys.close()
         lock.close()
 
 

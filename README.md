@@ -38,6 +38,22 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
+## Group placement and global shortcuts
+
+New companions default to a centered row at the top of the monitor, with spacing based on their actual size and additional rows when needed. Adding sessions or changing the active session reflows the automatic group. Dragging a companion removes it from automatic placement and preserves its position across restarts.
+
+The application registers these global shortcuts only when Windows reports the entire group is available:
+
+| Shortcut | Position |
+| --- | --- |
+| Ctrl+Alt+Up | Top center |
+| Ctrl+Alt+Right | Right center |
+| Ctrl+Alt+Left | Left center |
+
+Shortcuts reposition all companions on the monitor containing the mouse pointer, reset their manual placements, and keep the group centered and separated. The chosen group position persists. Group placement overrides terminal docking until the next explicit double-click, which can anchor the selected companion to its terminal again. Automatic focus changes preserve the chosen group placement.
+
+If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `codex-float status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
+
 Plain `codex` clients are matched using their live process workspaces and terminal footer metadata. The initial scan inspects inactive tabs once after at least two seconds without user input, then restores the originally selected tab. Later polls inspect the selected tab and reuse validated tab associations. The helper returns only workspace/title metadata and tab identifiers, without saving terminal transcripts or input. Ambiguous matches are left unassigned; the manual binding option remains available for other console hosts. Active unmanaged turns cannot be resumed into a second CLI.
 
 Starting another CLI client or persisting/renaming a conversation automatically refreshes the tab inspection, even inside an existing terminal window. An inactive new tab is discovered after the next two-second input-idle interval; no avatar restart is required. Ordinary turn timestamp updates do not trigger additional inactive-tab inspections.
