@@ -33,7 +33,7 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 
 - Double-click an avatar to restore its terminal. If its managed CLI has exited, double-click resumes the conversation in a new terminal.
 - The selected avatar is 178x152 pixels; others are 89x76 pixels. Switching foreground between bound terminals exchanges the full-size avatar automatically.
-- The selected avatar follows the upper-right client area below the title-bar controls. It hides while minimized, returns after restore, and remains available on the desktop after the terminal closes.
+- The selected avatar follows the upper-right client area below the title-bar controls. Avatars stay visible when their terminal is minimized, keeping their last on-screen position and showing a gray border. Double-click restores the terminal; the selected avatar resumes docking after restoration. Avatars also remain available on the desktop after the terminal closes.
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
