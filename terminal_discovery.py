@@ -40,7 +40,8 @@ def match_session(tab, threads, live_cwds):
     workspace = normalize_cwd(tab.get('workspace') or '')
     if workspace not in live_cwds:
         return None
-    candidates = [thread for thread in threads if normalize_cwd(thread['cwd']) == workspace]
+    provider = tab.get('provider') or 'codex'
+    candidates = [thread for thread in threads if thread.get('provider', 'codex') == provider and normalize_cwd(thread['cwd']) == workspace]
     title = tab.get('title') or ''
     named = [thread for thread in candidates if title in (thread.get('name'), thread.get('title'))]
     if len(named) == 1:
@@ -142,20 +143,26 @@ def native_clients():
         kernel.CloseHandle(handle)
     result = []
     for pid, metadata in catalog.items():
-        if metadata['name'] != 'codex.exe':
+        if metadata['name'] not in {'codex.exe', 'claude.exe'}:
             continue
         parent = catalog.get(metadata['parent'], {}).get('name')
-        if parent not in {'node.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe'}:
+        if metadata['name'] == 'codex.exe' and parent not in {'node.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe'}:
             continue
         try:
             process = psutil.Process(pid)
             command = process.cmdline()
-            if 'app-server' in command or (len(command) > 1 and command[1] in {'exec', 'review', 'debug'}):
+            provider = 'claude' if metadata['name'] == 'claude.exe' else 'codex'
+            if 'app-server' in command or (len(command) > 1 and command[1] in {'exec', 'review', 'debug', 'auth', 'doctor', 'agents', 'update', 'install'}):
+                continue
+            if provider == 'claude' and any(arg in command for arg in ('-p', '--print', '--version', '--help')):
                 continue
             # Read only the terminal-session key; never retain the environment.
-            terminal_id = process.environ().get('WT_SESSION')
+            environment = process.environ()
+            terminal_id = environment.get('WT_SESSION')
             if terminal_id:
-                result.append({'pid': process.pid, 'cwd': process.cwd(), 'terminal_id': terminal_id})
+                result.append({'pid': process.pid, 'cwd': process.cwd(), 'terminal_id': terminal_id,
+                    'provider': provider, 'created_at': process.create_time(),
+                    'config_dir': environment.get('CLAUDE_CONFIG_DIR') if provider == 'claude' else None})
         except (psutil.Error, OSError):
             continue
     return result
@@ -196,9 +203,10 @@ class TerminalDiscovery:
         save(STATE / 'external-cli.json', {'heartbeat': time.time(), 'sessions': result})
         return result
 
-    def update(self, threads):
-        clients = native_clients()
-        cwds = Counter(normalize_cwd(client['cwd']) for client in clients)
+    def update(self, threads, clients=None):
+        clients = native_clients() if clients is None else clients
+        cwds = {provider: Counter(normalize_cwd(client['cwd']) for client in clients if client.get('provider', 'codex') == provider)
+            for provider in ('codex', 'claude')}
         windows = self.native.all_terminal_windows()
         handles = [window.hwnd for window in windows]
         signature = discovery_signature(handles, clients, threads)
@@ -208,7 +216,10 @@ class TerminalDiscovery:
             self.bridge = TabBridge()
         inspect_all = signature != self.last_scan_signature and idle_seconds() >= 2
         try:
-            reply = self.bridge.call({'mode': 'scan', 'windows': handles, 'inspect_all': inspect_all})
+            reply = self.bridge.call({'mode': 'scan', 'windows': handles, 'inspect_all': inspect_all,
+                'claude_workspaces': sorted(cwds['claude']),
+                'claude_titles': [{'id': thread['id'], 'title': thread.get('name') or ''}
+                    for thread in threads if thread.get('provider') == 'claude']})
         except (OSError, RuntimeError):
             self.bridge = None
             raise
@@ -218,25 +229,52 @@ class TerminalDiscovery:
             self.last_scan_signature = signature
         by_id = {thread['id']: thread for thread in threads}
         result = {}
+        ambiguous = set()
+        claude_tabs = [tab for tab in reply['tabs'] if tab.get('provider') == 'claude']
         for tab in reply['tabs']:
             key = f'{tab["hwnd"]}:{tab["tab_id"]}'
-            ident = match_session(tab, threads, cwds)
             cached = self.cache.get(key)
+            provider = tab.get('provider') or by_id.get((cached or {}).get('id'), {}).get('provider', 'codex')
+            ident = match_session(dict(tab, provider=provider), threads, cwds[provider])
+            hint = by_id.get(tab.get('claude_session'), {})
+            if (provider == 'claude' and hint.get('provider') == 'claude'
+                    and any(client['pid'] == hint.get('cli_pid') and client.get('provider') == 'claude' for client in clients)
+                    and (not tab.get('workspace') or normalize_cwd(tab['workspace']) == normalize_cwd(hint['cwd']))):
+                ident = hint['id']
+            if ident is None and provider == 'claude' and len(claude_tabs) == 1:
+                candidates = [thread for thread in threads if thread.get('provider') == 'claude'
+                    and any(client['pid'] == thread.get('cli_pid') and client.get('provider') == 'claude' for client in clients)]
+                if len(candidates) == 1:
+                    ident = candidates[0]['id']
             if ident is None and cached and (not tab['selected'] or tab.get('workspace')):
                 owner_ids = cached.get('cli_pids', [cached.get('cli_pid')])
-                owners = [client for client in clients if client['pid'] in owner_ids]
+                owners = [client for client in clients if client['pid'] in owner_ids and client.get('provider', 'codex') == provider
+                    and (str(client['pid']) not in cached.get('cli_births', {})
+                         or cached['cli_births'][str(client['pid'])] == client.get('created_at'))]
                 if owners and cached['id'] in by_id and any(normalize_cwd(owner['cwd']) == normalize_cwd(by_id[cached['id']]['cwd']) for owner in owners):
                     ident = cached['id']
             if ident is None:
                 continue
-            owners = [client for client in clients if normalize_cwd(client['cwd']) == normalize_cwd(by_id[ident]['cwd'])]
+            owners = [client for client in clients if client.get('provider', 'codex') == provider
+                and normalize_cwd(client['cwd']) == normalize_cwd(by_id[ident]['cwd'])
+                and (provider != 'claude' or client['pid'] == by_id[ident].get('cli_pid'))]
+            if not owners:
+                continue
+            if ident in result:
+                ambiguous.add(ident)
             owner_pid = owners[0]['pid'] if len(owners) == 1 else None
             host = next(window for window in windows if window.hwnd == tab['hwnd'])
             result[ident] = {'id': ident, 'kind': 'tab', 'live': True, 'running': True,
                 'heartbeat': time.time(), 'started_at': time.time(), 'hwnd': host.hwnd,
                 'window_pid': host.pid, 'executable': host.executable, 'tab_id': tab['tab_id'],
                 'selected': tab['selected'], 'cli_pid': owner_pid, 'cli_pids': [client['pid'] for client in owners]}
-            self.cache[key] = {'id': ident, 'cli_pids': [client['pid'] for client in owners]}
+            self.cache[key] = {'id': ident, 'cli_pids': [client['pid'] for client in owners],
+                'cli_births': {str(client['pid']): client['created_at'] for client in owners if 'created_at' in client}}
+        for ident in ambiguous:
+            result[ident] = {key: value for key, value in result[ident].items()
+                if key not in {'hwnd', 'window_pid', 'executable', 'tab_id'}}
+            result[ident].update(kind='unbound', selected=False)
+        self.cache = {key: value for key, value in self.cache.items() if value['id'] not in ambiguous}
         save(STATE / 'tab-bindings.json', self.cache)
         return self.publish(result, clients)
 

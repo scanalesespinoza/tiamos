@@ -1,10 +1,10 @@
-# Codex CLI + floating avatars
+# Codex and Claude CLI floating avatars
 
-Run native Codex CLI sessions in independent Windows terminal windows with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
+Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a soft blue background; Claude companions have a soft orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
 ## Install
 
-Requires Windows, Python 3.12 with Tkinter, Pillow, and a signed-in Codex CLI. Windows Terminal is preferred; a standalone console is the fallback.
+Requires Windows, Python 3.12 with Tkinter, Pillow, and Codex CLI and/or Claude Code CLI. Automatic discovery of existing sessions uses Windows Terminal. Managed Codex launches also support a standalone console fallback.
 
 ```powershell
 npm install -g @openai/codex
@@ -32,13 +32,19 @@ codex-float status
 Each managed terminal has a unique fixed title and a dedicated window. Existing native CLI clients in Windows Terminal are also discovered automatically, including resumed chats whose saved source still says `vscode`. Each tab receives its own avatar and native tab identifier. Double-click selects the exact tab; changing tabs exchanges the full-size avatar even when both tabs share one window.
 
 - Double-click an avatar to restore its terminal. If its managed CLI has exited, double-click resumes the conversation in a new terminal.
-- The foreground CLI session's avatar is 178x152 pixels; others are 89x76 pixels. When no Codex CLI terminal/tab is active, all avatars return to 178x152 pixels. Switching to another application, minimizing or closing the terminal, or selecting a non-CLI tab clears the highlighted session. Returning to a CLI tab restores the size distinction automatically.
+- The foreground CLI session's avatar is 178x152 pixels; others are 89x76 pixels. When no supported CLI terminal/tab is active, all avatars return to 178x152 pixels. Switching to another application, minimizing or closing the terminal, or selecting a non-CLI tab clears the highlighted session. Returning to a CLI tab restores the size distinction automatically.
 - Closing all terminals keeps today's previously detected companions available at the same normal size. Double-click reopens the corresponding conversation. Sessions from earlier days are excluded.
 - The selected avatar follows the upper-right client area below the title-bar controls. Avatars stay visible when their terminal is minimized, keeping their last on-screen position and showing a gray border. Double-click restores the terminal; the selected avatar resumes docking after restoration. Avatars also remain available on the desktop after the terminal closes.
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
 ## Understand each session
+
+Claude sessions already running in Windows Terminal are discovered without restarting them or installing hooks. The adapter validates the interactive session's PID and Windows process creation time against Claude's local session registry, and reads its reported state. Conversation titles, including automatic title changes, help associate the exact tab. Namespaced identities keep Codex and Claude separate even in the same workspace. Ambiguous tab matches remain unassigned rather than selecting another session. Windows Terminal title overrides or older Claude versions without the local session registry can prevent automatic binding.
+
+The adapter reads top-level Claude JSONL records incrementally for bounded objective/progress/result previews and fixed tool categories. Subagent records, API request payloads, reasoning, and tool output are not retained. Recognized idle/working metadata determines liveness; unsupported states without lifecycle evidence show **Sin estado**. API failures and interrupted turns do not produce a success celebration. Claude's local formats are version-specific.
+
+Both providers share dragging, focus sizing, docking, hide/show, detail cards, quiet mode, and personalization. Today's closed Claude sessions remain available; double-click resumes them with `claude --resume <session-id>` in their original workspace. The existing `new`, `list`, and `resume` launcher commands remain Codex commands. Claude authentication, Vertex settings, and hooks are left unchanged.
 
 Each session keeps its own color and accessory across restarts. Companions read a book while exploring, type or hold a pencil while editing, show moving test lights during validation, and hold a wrench after an observed tool error. These gestures describe activity categories, not the agent's thoughts or proof that a task succeeded. A short wave acknowledges explicit terminal selection; dragging produces a small reaction inside the avatar without moving the window by itself.
 
@@ -104,7 +110,8 @@ Before relocating, stop avatars and finish managed CLI sessions, move the reposi
 
 ```powershell
 python -m unittest discover -s . -p "test_*.py" -v
-python generate_assets.py
 ```
 
 References: [CLI commands](https://learn.chatgpt.com/docs/developer-commands), [local app-server protocol](https://learn.chatgpt.com/docs/app-server), [Windows Terminal arguments](https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments).
+
+Claude reference: [CLI commands and resume](https://code.claude.com/docs/en/cli-reference). Current companion sprites are generated in memory by `avatar_personality.py`; the legacy GIF generator is not used by the live renderer.
