@@ -489,9 +489,11 @@ def serve():
         title = tk.Label(window, text=chat['title'][:12], bg=theme['background'], fg=theme['foreground'], font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
         title.pack(fill='x')
         picture = tk.Label(window, bg=theme['background'], borderwidth=0, padx=0, pady=0)
-        picture.pack()
+        picture.pack(fill='both', expand=True)
         label = tk.Label(window, bg=theme['background'], fg=theme['foreground'], font=('Segoe UI', 6), pady=0, padx=0, borderwidth=0)
-        label.pack()
+        # Allocate the caption before the sprite, leaving a dedicated bottom
+        # strip for XP. The compact sprite can yield space without clipping text.
+        label.pack(side='bottom', before=title, pady=(0, 5))
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
         entry.update(accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
