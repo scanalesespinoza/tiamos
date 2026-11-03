@@ -38,6 +38,8 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
+Opening a context menu hides the hover card and suspends automatic hover details across all avatars until the menu and its submenus close. Normal hover resumes after dismissal. Explicit detail/profile menu actions still open the requested card.
+
 ## Colors and live refresh
 
 Provider colors are stored in `%LOCALAPPDATA%\CodexFloat\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.

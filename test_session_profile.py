@@ -82,6 +82,17 @@ class ProfileCardTests(unittest.TestCase):
         self.card.refresh()
         self.assertIn('última lectura', self.card.labels['profile_note'].cget('text'))
 
+    def test_explicit_profile_menu_command_works_while_hover_is_suppressed(self):
+        menu = Mock(tk_popup=Mock(side_effect=lambda *_: self.card.show('session', pinned=True, profile=True)))
+        with patch.object(self.card, 'no_activate'), patch.object(self.card.window, 'deiconify'), \
+             patch.object(self.card.window, 'lift'):
+            self.assertEqual(self.card.popup_menu(menu, 100, 100), 'break')
+        self.assertEqual(self.card.ident, 'session')
+        self.assertTrue(self.card.profile)
+        self.assertTrue(self.card.pinned)
+        self.assertFalse(self.card.hover_suspended)
+        self.viewed.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

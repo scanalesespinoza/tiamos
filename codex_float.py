@@ -502,11 +502,7 @@ def serve():
         menu.add_command(label='Cerrar menu')
 
         def show_menu(event):
-            details.hide()
-            try:
-                menu.tk_popup(event.x_root, event.y_root)
-            finally:
-                menu.grab_release()
+            return details.popup_menu(menu, event.x_root, event.y_root)
 
         for surface in (window, title, picture, label, badge, xp_bar):
             surface.bind('<ButtonPress-1>', press)
