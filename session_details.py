@@ -34,6 +34,8 @@ def details_text(chat, now=None):
     unavailable = bool(chat.get('unavailable'))
     working = chat.get('state') == 'working'
     state = 'Trabajando' if working else 'En descanso'
+    if chat.get('state') == 'unknown':
+        state = 'Estado de actividad no disponible'
     if terminal and not terminal.get('live'):
         state = 'CLI cerrado · doble clic para reanudar'
     elif chat.get('minimized'):
@@ -93,6 +95,8 @@ def details_text(chat, now=None):
 
 
 def compact_caption(chat, full=True):
+    if chat.get('state') == 'unknown':
+        return 'Sin estado'
     if chat.get('state') != 'working':
         return 'En descanso' if full else 'Zzz'
     phase = (chat.get('activity') or {}).get('phase', '')
@@ -275,7 +279,8 @@ class DetailsCard:
         chat['unavailable'] = entry.get('unavailable', False)
         chat['observed_at'] = entry.get('observed_at')
         fields = details_text(chat)
-        fields.update(project=safe_preview(chat.get('project') or 'Codex CLI', 60),
+        provider = 'Claude' if chat.get('provider') == 'claude' else 'Codex'
+        fields.update(project=provider + ' · ' + safe_preview(chat.get('project') or 'CLI', 60),
             title=safe_preview(chat.get('title', 'Sesión de Codex'), 100),
             objective_title='Objetivo' if fields['objective'] else '', activity_title='Actividad observada')
         if not fields['report']:

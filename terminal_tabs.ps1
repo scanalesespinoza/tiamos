@@ -48,6 +48,16 @@ while ($null -ne ($line = [Console]::ReadLine())) {
                     }
                     $workspace = $null
                     $title = $null
+                    $provider = if ($tab.Current.Name -match '(?i)^[^\p{L}\p{N}]*Claude(?:\s+Code)?(?:$|\s*[-|\u00b7])') { 'claude' } else { $null }
+                    $claudeSession = $null
+                    if ($tab.Current.Name -match '^[\u2733\u273b\u273d\u2736\u2722\u2800-\u28ff*]') {
+                        $cleanTitle = $tab.Current.Name -replace '^[^\p{L}\p{N}]+', ''
+                        $namedSessions = @($request.claude_titles | Where-Object { $_.title -and $_.title -eq $cleanTitle })
+                        if ($namedSessions.Count -eq 1) {
+                            $provider = 'claude'
+                            $claudeSession = $namedSessions[0].id
+                        }
+                    }
                     # Inspect inactive tabs only once, then restore the user's tab.
                     if ($selected -or $request.inspect_all) {
                         if (-not $selected) {
@@ -58,17 +68,23 @@ while ($null -ne ($line = [Console]::ReadLine())) {
                         if ($terminal) {
                             $text = $terminal.GetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern).DocumentRange.GetText(-1)
                             # Return only the CLI footer's metadata, never transcript text.
-                            foreach ($candidate in ($text -split '\r?\n' | Select-Object -Last 15)) {
+                            if ($provider -eq 'claude') {
+                                $matchingWorkspaces = @($request.claude_workspaces | Where-Object {
+                                    $text.Replace('/', '\').IndexOf($_, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                                })
+                                if ($matchingWorkspaces.Count -eq 1) { $workspace = $matchingWorkspaces[0] }
+                            } else { foreach ($candidate in ($text -split '\r?\n' | Select-Object -Last 15)) {
                                 $parts = $candidate -split ([char]0x00b7)
                                 if ($parts.Count -ge 3 -and $parts[1].Trim() -match '^(~|[a-zA-Z]:\\|/)') {
                                     $workspace = $parts[1].Trim()
                                     $title = $parts[-1].Trim()
+                                    $provider = 'codex'
                                 }
-                            }
+                            } }
                             $text = $null
                         }
                     }
-                    $result += @{ hwnd = [long]$handle; tab_id = $id; selected = $selected; workspace = $workspace; title = $title }
+                    $result += @{ hwnd = [long]$handle; tab_id = $id; selected = $selected; workspace = $workspace; title = $title; provider = $provider; claude_session = $claudeSession }
                 }
             } finally {
                 if ($request.mode -ne 'select' -and $original -and $request.inspect_all) {

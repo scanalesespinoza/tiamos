@@ -101,9 +101,12 @@ class Reader:
         self.cli_only = cli_only
         self.registration_loader = registration_loader
         self.discovery = None
+        self.claude = None
         if discover:
             from terminal_discovery import TerminalDiscovery
+            from claude_sessions import ClaudeSessions
             self.discovery = TerminalDiscovery()
+            self.claude = ClaudeSessions()
 
     def close(self):
         if self.discovery:
@@ -115,25 +118,30 @@ class Reader:
         terminals = self.registration_loader() if self.cli_only else {}
         terminals = {ident: record for ident, record in terminals.items() if record.get('started_at', 0) >= midnight}
         db = self.codex / 'state_5.sqlite'
-        if not db.exists():
+        if not db.exists() and self.claude is None:
             raise RuntimeError('No se encuentra la base local de chats de Codex.')
-        with closing(sqlite3.connect(db.as_uri() + '?mode=ro', uri=True, timeout=2)) as connection:
-            extra = ' OR id IN (' + ','.join('?' for _ in terminals) + ')' if terminals else ''
-            columns = {row[1] for row in connection.execute('PRAGMA table_info(threads)')}
-            title = "COALESCE(NULLIF(name,''),title)" if 'name' in columns else 'title'
-            cwd = 'cwd' if 'cwd' in columns else "''"
-            name = 'name' if 'name' in columns else "''"
-            fields = f'id, {title}, rollout_path, source, {cwd}, {name}, title, updated_at'
-            if self.discovery:
-                rows = connection.execute(f'''SELECT {fields} FROM threads WHERE archived=0
-                    AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC LIMIT 500''').fetchall()
-            else:
-                rows = connection.execute(f'''SELECT {fields}
-                    FROM threads WHERE archived=0 AND (updated_at>=?{extra})
-                    AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
+        rows = []
+        if db.exists():
+            with closing(sqlite3.connect(db.as_uri() + '?mode=ro', uri=True, timeout=2)) as connection:
+                extra = ' OR id IN (' + ','.join('?' for _ in terminals) + ')' if terminals else ''
+                columns = {row[1] for row in connection.execute('PRAGMA table_info(threads)')}
+                title = "COALESCE(NULLIF(name,''),title)" if 'name' in columns else 'title'
+                cwd = 'cwd' if 'cwd' in columns else "''"
+                name = 'name' if 'name' in columns else "''"
+                fields = f'id, {title}, rollout_path, source, {cwd}, {name}, title, updated_at'
+                if self.discovery:
+                    rows = connection.execute(f'''SELECT {fields} FROM threads WHERE archived=0
+                        AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC LIMIT 500''').fetchall()
+                else:
+                    rows = connection.execute(f'''SELECT {fields}
+                        FROM threads WHERE archived=0 AND (updated_at>=?{extra})
+                        AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
         if self.discovery:
+            from terminal_discovery import native_clients
+            clients = native_clients()
             metadata = [{'id': row[0], 'cwd': row[4], 'name': row[5], 'title': row[6], 'recent': row[7] >= midnight} for row in rows]
-            terminals.update(self.discovery.update(metadata))
+            metadata.extend(self.claude.metadata(clients, now))
+            terminals.update(self.discovery.update(metadata, clients=clients))
         result = []
         seen = set()
         for ident, title, path, source, cwd, name, original_title, updated_at in rows:
@@ -160,18 +168,21 @@ class Reader:
                 state = 'sleeping'
             chat = {'id': ident, 'title': title or 'Chat de Codex', 'state': state}
             if self.cli_only:
+                chat['provider'] = 'codex'
                 chat['terminal'] = terminal
                 chat['project'] = safe_preview(str(cwd).replace('\\', '/').rstrip('/').rsplit('/', 1)[-1], 60)
                 chat['activity'] = trace.activity.summary()
             result.append(chat)
         self.traces = {key: trace for key, trace in self.traces.items() if key in seen}
+        if self.claude:
+            result.extend(self.claude.snapshot(terminals))
         return result
 
 
 def serve():
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
-    from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
+    from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, provider_theme, render_frames, visual_state
     from PIL import Image, ImageTk
     import ctypes
     import msvcrt
@@ -204,7 +215,7 @@ def serve():
 
     def animation(entry, state):
         if state not in entry['animations']:
-            images = render_frames(state, entry['accent'], entry['accessory'])
+            images = render_frames(state, entry['accent'], entry['accessory'], entry['theme']['background'])
             entry['animations'][state] = (
                 [ImageTk.PhotoImage(frame) for frame in images],
                 [ImageTk.PhotoImage(frame.resize((80, 52), Image.Resampling.LANCZOS)) for frame in images])
@@ -274,6 +285,9 @@ def serve():
     def bound_window(ident):
         binding = bindings.get(ident)
         if binding:
+            terminal = widgets.get(ident, {}).get('terminal') or {}
+            if not binding.get('manual') and terminal.get('kind') == 'unbound':
+                return None
             window = native.inspect(binding['hwnd'])
             if window and window.pid == binding['pid'] and window.executable == binding['executable']:
                 return window
@@ -312,7 +326,11 @@ def serve():
             associate(ident, target, manual=bindings.get(ident, {}).get('manual', False))
             return 'break'
         try:
-            launch(ident)
+            if entry['chat'].get('provider') == 'claude':
+                from claude_sessions import launch_claude
+                launch_claude(entry['chat'])
+            else:
+                launch(ident)
             pending = (ident, time.monotonic() + 20)
             focus_error = None
         except (OSError, RuntimeError, ValueError) as error:
@@ -368,6 +386,7 @@ def serve():
         ident = chat['id']
         known_identity = ident in identities
         accent, accessory = identity(ident, identities)
+        theme = provider_theme(chat.get('provider'))
         if not known_identity:
             atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
@@ -375,23 +394,23 @@ def serve():
         window.title('Codex Float - ' + chat['title'])
         window.overrideredirect(True)
         window.attributes('-topmost', True)
-        window.configure(bg='#171d28', highlightbackground='#46536b', highlightthickness=1)
-        window.attributes('-alpha', .95)
+        window.configure(bg=theme['background'], highlightbackground='#46536b', highlightthickness=1)
+        window.attributes('-alpha', 1)
         width, height = HALF_SIZE
         location = positions.get(ident, [layout_area[0] + 12, layout_area[1] + 12])
         x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE)
         positions.setdefault(ident, [x, y])
         window.geometry(f'{width}x{height}{x:+d}{y:+d}')
-        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg=accent, font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
+        title = tk.Label(window, text=chat['title'][:12], bg=theme['background'], fg=theme['foreground'], font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
         title.pack(fill='x')
-        picture = tk.Label(window, bg='#171d28', borderwidth=0, padx=0, pady=0)
+        picture = tk.Label(window, bg=theme['background'], borderwidth=0, padx=0, pady=0)
         picture.pack()
-        label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 6), pady=0, padx=0, borderwidth=0)
+        label = tk.Label(window, bg=theme['background'], fg=theme['foreground'], font=('Segoe UI', 6), pady=0, padx=0, borderwidth=0)
         label.pack()
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
-        entry.update(accent=accent, accessory=accessory, animations={}, visual=None, celebrate_until=0, greet_until=0)
-        badge = tk.Label(window, text='●', fg='#ffc275', bg='#171d28', font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
+        entry.update(accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
+        badge = tk.Label(window, text='●', fg='#8b4e00', bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
         entry['badge'] = badge
         entry['chat'] = chat
         widgets[ident] = entry
@@ -432,7 +451,7 @@ def serve():
             color_choice.set(COLORS.index(accent))
             accessory_choice.set(accessory)
             entry.update(accent=accent, accessory=accessory, frame=0)
-            entry['title'].configure(fg=accent)
+            entry['title'].configure(fg=theme['foreground'])
             entry['animations'].clear()
             visual = entry['visual'] or visual_state(entry['chat'])
             entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
@@ -542,8 +561,8 @@ def serve():
             ident, deadline = pending
             if ident not in widgets or time.monotonic() > deadline:
                 pending = None
-                focus_error = 'No se encontro la terminal de Codex'
-            elif bound_window(ident):
+                focus_error = 'No se encontró la terminal de la sesión.'
+            elif (widgets[ident].get('terminal') or {}).get('live') and bound_window(ident):
                 target = bound_window(ident)
                 if native.activate(target):
                     associate(ident, target)
@@ -589,7 +608,8 @@ def serve():
                     x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
             unread = notices.pending(ident)
-            entry['title'].configure(text=entry['chat_title'][:(22 if full else 10) if unread else (25 if full else 12)])
+            display_title = entry['theme']['name'] + ' · ' + entry['chat_title']
+            entry['title'].configure(text=display_title[:(22 if full else 10) if unread else (25 if full else 12)])
             if unread:
                 entry['badge'].configure(font=('Segoe UI', 9 if full else 7))
                 entry['badge'].place(relx=1, x=-3, y=3 if full else 0, anchor='ne')
@@ -637,7 +657,8 @@ def serve():
                 caption = 'Elige ventana'
             if entry.get('terminal') and not entry['terminal'].get('live'):
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
-            entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error or unread else entry['accent'] if state == 'working' else '#aab8d5')
+            entry['label'].configure(text='Sin conexion' if last_error else caption,
+                fg='#754000' if last_error or unread else entry['theme']['foreground'])
         position_group()
         if not avatars_hidden and tick_number % 2 == 0:
             details.reconcile_pointer()
@@ -660,6 +681,7 @@ def serve():
                 'quiet': quiet.get(),
                 'hidden': avatars_hidden,
                 'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
+                    'provider': v['chat'].get('provider', 'codex'), 'background': v['theme']['background'],
                     'visual': v['visual'], 'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
                 'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)
                     for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count')} for ident, v in widgets.items()},

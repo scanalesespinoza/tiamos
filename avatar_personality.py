@@ -9,6 +9,11 @@ ACCESSORIES = ('Antena', 'Auriculares', 'Orejas', 'Gorra')
 STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'error', 'sleeping', 'celebrating', 'greeting', 'carried')
 
 
+def provider_theme(provider):
+    return {'name': 'Claude', 'background': '#ffe4cc', 'foreground': '#75421f'} if provider == 'claude' else {
+        'name': 'Codex', 'background': '#dcecff', 'foreground': '#25496b'}
+
+
 def identity(ident, registry):
     if ident not in registry:
         start = int.from_bytes(hashlib.sha256(ident.encode()).digest()[:4], 'big') % 32
@@ -35,6 +40,8 @@ def visual_state(chat, celebrating=False, greeting=False, carried=False):
     if carried:
         return 'carried'
     activity = chat.get('activity') or {}
+    if chat.get('state') == 'unknown':
+        return 'waiting'
     if chat.get('state') != 'working':
         return 'celebrating' if celebrating else 'greeting' if greeting else 'sleeping'
     latest = (activity.get('actions') or [{}])[0]
@@ -47,7 +54,7 @@ def visual_state(chat, celebrating=False, greeting=False, carried=False):
         return 'editing'
     if 'Pruebas' in phase or 'Compilación' in phase:
         return 'testing'
-    if phase == 'Esperando una herramienta':
+    if phase.startswith('Esperando'):
         return 'waiting'
     if any(word in phase for word in ('Exploración', 'Investigación', 'Inspección', 'Revisión')):
         return 'reading'
@@ -91,10 +98,10 @@ class Notices:
         return True
 
 
-def render_frames(state, accent, accessory=0):
+def render_frames(state, accent, accessory=0, background='#171d28'):
     frames = []
     for step in range(8):
-        image = Image.new('RGB', (160, 104), '#171d28')
+        image = Image.new('RGB', (160, 104), background)
         draw = ImageDraw.Draw(image)
         bounce = round(math.sin(step * math.pi / 4) * (3 if state == 'celebrating' else 1))
         top = 17 + bounce
@@ -140,7 +147,7 @@ def render_frames(state, accent, accessory=0):
             for lamp in range(3):
                 draw.ellipse((57 + lamp * 18, 89, 63 + lamp * 18, 95), fill=accent if lamp == step % 3 else '#46536b')
         elif state == 'waiting':
-            draw.rectangle((59, 76, 101, 103), fill='#171d28')
+            draw.rectangle((59, 76, 101, 103), fill=background)
             draw.polygon([(62, 78), (98, 78), (98, 81), (84, 90), (98, 99),
                 (98, 102), (62, 102), (62, 99), (76, 90), (62, 81)], fill='#0d1420', outline=accent)
             draw.line((60, 77, 100, 77), fill=accent, width=2)

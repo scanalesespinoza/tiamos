@@ -70,6 +70,31 @@ class TerminalMatchingTests(unittest.TestCase):
         threads = [{'id': 'a', 'cwd': 'D:\\work', 'name': 'First'}]
         self.assertIsNone(match_session({'workspace': 'D:\\work', 'title': 'First'}, threads, set()))
 
+    def test_claude_title_hint_and_codex_footer_share_workspace_without_cross_binding(self):
+        clients = [{'pid': 10, 'cwd': 'D:\\work', 'provider': 'codex', 'created_at': 10},
+            {'pid': 20, 'cwd': 'D:\\work', 'provider': 'claude', 'created_at': 20}]
+        threads = [{'id': 'codex-id', 'cwd': 'D:\\work', 'name': 'Work'},
+            {'id': 'claude:id', 'provider': 'claude', 'cwd': 'D:\\work', 'name': 'Claude title', 'cli_pid': 20}]
+        tabs = [{'hwnd': 123, 'tab_id': 'codex-tab', 'selected': False, 'provider': 'codex', 'workspace': 'D:\\work', 'title': 'Work'},
+            {'hwnd': 123, 'tab_id': 'claude-tab', 'selected': True, 'provider': 'claude', 'workspace': None, 'claude_session': 'claude:id'}]
+        monitor = TerminalDiscovery.__new__(TerminalDiscovery)
+        monitor.bridge = SimpleNamespace(call=lambda _: {'tabs': tabs})
+        monitor.native = SimpleNamespace(all_terminal_windows=lambda: [SimpleNamespace(hwnd=123, pid=42, executable='WindowsTerminal.exe')])
+        monitor.cache, monitor.last_scan_signature = {}, None
+        monitor.publish = lambda current, _: current
+        with patch('terminal_discovery.idle_seconds', return_value=3), patch('terminal_discovery.save'):
+            result = monitor.update(threads, clients=clients)
+        self.assertEqual(result['codex-id']['tab_id'], 'codex-tab')
+        self.assertEqual(result['claude:id']['tab_id'], 'claude-tab')
+        self.assertEqual(result['claude:id']['cli_pids'], [20])
+        self.assertTrue(result['claude:id']['selected'])
+        tabs.append(dict(tabs[1], tab_id='ambiguous-copy', selected=False))
+        with patch('terminal_discovery.idle_seconds', return_value=3), patch('terminal_discovery.save'):
+            result = monitor.update(threads, clients=clients)
+        self.assertEqual(result['claude:id']['kind'], 'unbound')
+        self.assertNotIn('tab_id', result['claude:id'])
+        self.assertFalse(result['claude:id']['selected'])
+
     @unittest.skipUnless(sys.platform == 'win32', 'Windows UI Automation transport')
     def test_metadata_bridge_handles_empty_window_list(self):
         bridge = TabBridge()
