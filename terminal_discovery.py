@@ -1,4 +1,6 @@
 """Discover existing CLI clients and bind their Windows Terminal tabs."""
+import ctypes as C
+from ctypes import wintypes as W
 import json
 from contextlib import closing
 from collections import Counter
@@ -15,6 +17,17 @@ import time
 import psutil
 from cli_sessions import BASE, STATE, CODEX, read, save
 from window_focus import Windows
+
+
+class _ProcessEntry(C.Structure):
+    _fields_ = [('size', W.DWORD), ('usage', W.DWORD), ('pid', W.DWORD),
+        ('heap', C.c_size_t), ('module', W.DWORD), ('threads', W.DWORD),
+        ('parent', W.DWORD), ('priority', W.LONG), ('flags', W.DWORD),
+        ('name', W.WCHAR * 260)]
+
+
+class _LastInput(C.Structure):
+    _fields_ = [('size', W.UINT), ('tick', W.DWORD)]
 
 
 def normalize_cwd(value):
@@ -108,27 +121,18 @@ def select_tab(record):
 
 
 def native_clients():
-    import ctypes as C
-    from ctypes import wintypes as W
-
-    class Entry(C.Structure):
-        _fields_ = [('size', W.DWORD), ('usage', W.DWORD), ('pid', W.DWORD),
-            ('heap', C.c_size_t), ('module', W.DWORD), ('threads', W.DWORD),
-            ('parent', W.DWORD), ('priority', W.LONG), ('flags', W.DWORD),
-            ('name', W.WCHAR * 260)]
-
     kernel = C.WinDLL('kernel32', use_last_error=True)
     kernel.CreateToolhelp32Snapshot.argtypes = [W.DWORD, W.DWORD]
     kernel.CreateToolhelp32Snapshot.restype = W.HANDLE
-    kernel.Process32FirstW.argtypes = [W.HANDLE, C.POINTER(Entry)]
-    kernel.Process32NextW.argtypes = [W.HANDLE, C.POINTER(Entry)]
+    kernel.Process32FirstW.argtypes = [W.HANDLE, C.POINTER(_ProcessEntry)]
+    kernel.Process32NextW.argtypes = [W.HANDLE, C.POINTER(_ProcessEntry)]
     kernel.CloseHandle.argtypes = [W.HANDLE]
     handle = kernel.CreateToolhelp32Snapshot(2, 0)
     if handle == C.c_void_p(-1).value:
         raise OSError('No se pudo consultar los procesos de Windows.')
     catalog = {}
     try:
-        entry = Entry()
+        entry = _ProcessEntry()
         entry.size = C.sizeof(entry)
         success = kernel.Process32FirstW(handle, C.byref(entry))
         while success:
@@ -158,13 +162,7 @@ def native_clients():
 
 
 def idle_seconds():
-    import ctypes as C
-    from ctypes import wintypes as W
-
-    class LastInput(C.Structure):
-        _fields_ = [('size', W.UINT), ('tick', W.DWORD)]
-
-    info = LastInput()
+    info = _LastInput()
     info.size = C.sizeof(info)
     if not C.windll.user32.GetLastInputInfo(C.byref(info)):
         return 0
