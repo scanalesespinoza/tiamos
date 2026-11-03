@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
 COLOR_NAMES = ('Menta', 'Azul', 'Lila', 'Ámbar', 'Rosa', 'Lima', 'Turquesa', 'Arena')
 ACCESSORIES = ('Antena', 'Auriculares', 'Orejas', 'Gorra')
-STATES = ('working', 'reading', 'editing', 'testing', 'error', 'sleeping', 'celebrating', 'greeting', 'carried')
+STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'error', 'sleeping', 'celebrating', 'greeting', 'carried')
 
 
 def identity(ident, registry):
@@ -47,6 +47,8 @@ def visual_state(chat, celebrating=False, greeting=False, carried=False):
         return 'editing'
     if 'Pruebas' in phase or 'Compilación' in phase:
         return 'testing'
+    if phase == 'Esperando una herramienta':
+        return 'waiting'
     if any(word in phase for word in ('Exploración', 'Investigación', 'Inspección', 'Revisión')):
         return 'reading'
     return 'working'
@@ -137,6 +139,15 @@ def render_frames(state, accent, accessory=0):
             draw.rounded_rectangle((48, 84, 113, 101), radius=4, fill='#0d1420', outline=accent)
             for lamp in range(3):
                 draw.ellipse((57 + lamp * 18, 89, 63 + lamp * 18, 95), fill=accent if lamp == step % 3 else '#46536b')
+        elif state == 'waiting':
+            draw.rectangle((59, 76, 101, 103), fill='#171d28')
+            draw.polygon([(62, 78), (98, 78), (98, 81), (84, 90), (98, 99),
+                (98, 102), (62, 102), (62, 99), (76, 90), (62, 81)], fill='#0d1420', outline=accent)
+            draw.line((60, 77, 100, 77), fill=accent, width=2)
+            draw.line((60, 102, 100, 102), fill=accent, width=2)
+            draw.polygon([(66 + step, 81 + step // 2), (94 - step, 81 + step // 2), (80, 88)], fill=accent)
+            draw.polygon([(65, 99), (95, 99), (80, 98 - step)], fill=accent)
+            draw.point((80, 90 + step % 3), fill=accent)
         elif state == 'error':
             draw.line((56, top + 14, 69, top + 18), fill='#ffc275', width=2)
             draw.line((126, 72, 140, 90), fill='#ffc275', width=5)

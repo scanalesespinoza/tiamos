@@ -94,7 +94,7 @@ class PersonalityTests(unittest.TestCase):
         for phase, expected in [('Exploración de archivos', 'reading'), ('Inspección visual', 'reading'),
             ('Revisión de cambios', 'reading'), ('Investigación', 'reading'),
             ('Edición de archivos', 'editing'), ('Pruebas y validación', 'testing'),
-            ('Compilación', 'testing'), ('Analizando', 'working')]:
+            ('Compilación', 'testing'), ('Esperando una herramienta', 'waiting'), ('Analizando', 'working')]:
             with self.subTest(phase=phase):
                 self.assertEqual(visual_state(chat(phase=phase, state='working')), expected)
         self.assertEqual(visual_state(chat(outcome='error', state='working'), greeting=True), 'error')

@@ -97,6 +97,7 @@ def compact_caption(chat, full=True):
         return 'En descanso' if full else 'Zzz'
     phase = (chat.get('activity') or {}).get('phase', '')
     for match, caption in [('Pruebas', 'Validando'), ('Edición', 'Editando'),
+        ('Esperando', 'Esperando'),
         ('Compilación', 'Compilando'), ('Investigación', 'Investigando'),
         ('Exploración', 'Explorando'), ('Git', 'Git'), ('Publicación', 'Publicando'),
         ('Revisión', 'Revisando'), ('Revisando', 'Revisando'), ('Inspección', 'Inspección')]:
