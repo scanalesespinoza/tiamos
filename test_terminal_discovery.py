@@ -16,6 +16,7 @@ class TerminalMatchingTests(unittest.TestCase):
     def test_stale_title_uses_only_unique_recent_workspace(self):
         threads = [{'id': 'old', 'cwd': 'D:\\work', 'name': 'Older', 'recent': False}, {'id': 'current', 'cwd': 'D:\\work', 'name': 'Renamed', 'recent': True}]
         self.assertEqual(match_session({'workspace': 'D:\\work', 'title': 'Cached title'}, threads, {'d:\\work'}), 'current')
+        self.assertIsNone(match_session({'workspace': 'D:\\work', 'title': 'Unknown new session'}, threads, {'d:\\work': 2}))
 
     def test_footer_without_a_live_cli_is_not_a_session(self):
         threads = [{'id': 'a', 'cwd': 'D:\\work', 'name': 'First'}]

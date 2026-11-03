@@ -1,6 +1,7 @@
 """Discover existing CLI clients and bind their Windows Terminal tabs."""
 import json
 from contextlib import closing
+from collections import Counter
 import datetime as dt
 import ntpath
 import os
@@ -36,6 +37,8 @@ def match_session(tab, threads, live_cwds):
         return recent_named[0]['id']
     # Renamed conversations can have a stale cached footer; only use a unique cwd.
     recent = [thread for thread in candidates if thread.get('recent', True)]
+    if isinstance(live_cwds, dict) and live_cwds[workspace] != 1:
+        return None
     return recent[0]['id'] if len(recent) == 1 else None
 
 
@@ -165,7 +168,7 @@ class TerminalDiscovery:
 
     def update(self, threads):
         clients = native_clients()
-        cwds = {normalize_cwd(client['cwd']) for client in clients}
+        cwds = Counter(normalize_cwd(client['cwd']) for client in clients)
         windows = self.native.all_terminal_windows()
         handles = [window.hwnd for window in windows]
         signature = tuple(handles)
