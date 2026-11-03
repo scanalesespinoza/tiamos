@@ -1,3 +1,23 @@
+param([switch]$MetadataOnly)
+
+function Get-ClaudeTabIdentity($tabTitle, $knownTitles) {
+    $provider = if ($tabTitle -match '(?i)^[^\p{L}\p{N}]*Claude(?:\s+Code)?(?:$|\s*[-|\u00b7])') { 'claude' } else { $null }
+    $session = $null
+    # Claude uses both star/braille spinners and rotating circle phases in OSC titles.
+    if ($tabTitle -match '^[\u2733\u273b\u273d\u2736\u2722\u25d0-\u25d3\u2800-\u28ff*]') {
+        $cleanTitle = $tabTitle -replace '^[^\p{L}\p{N}]+', ''
+        $matchingTitles = @($knownTitles | Where-Object { $_.title -and $_.title -eq $cleanTitle })
+        if ($matchingTitles.Count -eq 1) {
+            $provider = 'claude'
+            $session = $matchingTitles[0].id
+        }
+    }
+    return @{ provider = $provider; claude_session = $session }
+}
+
+# Pure metadata tests can load the matcher without starting UI Automation or its pipe loop.
+if ($MetadataOnly) { return }
+
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -48,16 +68,9 @@ while ($null -ne ($line = [Console]::ReadLine())) {
                     }
                     $workspace = $null
                     $title = $null
-                    $provider = if ($tab.Current.Name -match '(?i)^[^\p{L}\p{N}]*Claude(?:\s+Code)?(?:$|\s*[-|\u00b7])') { 'claude' } else { $null }
-                    $claudeSession = $null
-                    if ($tab.Current.Name -match '^[\u2733\u273b\u273d\u2736\u2722\u2800-\u28ff*]') {
-                        $cleanTitle = $tab.Current.Name -replace '^[^\p{L}\p{N}]+', ''
-                        $namedSessions = @($request.claude_titles | Where-Object { $_.title -and $_.title -eq $cleanTitle })
-                        if ($namedSessions.Count -eq 1) {
-                            $provider = 'claude'
-                            $claudeSession = $namedSessions[0].id
-                        }
-                    }
+                    $identity = Get-ClaudeTabIdentity $tab.Current.Name $request.claude_titles
+                    $provider = $identity.provider
+                    $claudeSession = $identity.claude_session
                     # Inspect inactive tabs only once, then restore the user's tab.
                     if ($selected -or $request.inspect_all) {
                         if (-not $selected) {

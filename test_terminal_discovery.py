@@ -1,9 +1,13 @@
 import unittest
 import sys
 import datetime as dt
+import json
+from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 from terminal_discovery import match_session, TabBridge, keep_daily_sessions, discovery_signature, TerminalDiscovery
+from window_focus import foreground_selection, avatar_size, FULL_SIZE, HALF_SIZE
 
 
 class TerminalMatchingTests(unittest.TestCase):
@@ -88,12 +92,41 @@ class TerminalMatchingTests(unittest.TestCase):
         self.assertEqual(result['claude:id']['tab_id'], 'claude-tab')
         self.assertEqual(result['claude:id']['cli_pids'], [20])
         self.assertTrue(result['claude:id']['selected'])
+        selected = foreground_selection({key: value['hwnd'] for key, value in result.items() if value['selected']}, 123, 'codex-id')
+        self.assertEqual(selected, 'claude:id')
+        self.assertEqual(avatar_size('claude:id', selected), FULL_SIZE)
+        self.assertEqual(avatar_size('codex-id', selected), HALF_SIZE)
         tabs.append(dict(tabs[1], tab_id='ambiguous-copy', selected=False))
         with patch('terminal_discovery.idle_seconds', return_value=3), patch('terminal_discovery.save'):
             result = monitor.update(threads, clients=clients)
         self.assertEqual(result['claude:id']['kind'], 'unbound')
         self.assertNotIn('tab_id', result['claude:id'])
         self.assertFalse(result['claude:id']['selected'])
+
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows UI Automation transport')
+    def test_claude_title_spinners_match_exact_session_without_cross_binding(self):
+        script = str(Path(__file__).with_name('terminal_tabs.ps1')).replace("'", "''")
+        command = f". '{script}' -MetadataOnly\n" + r'''
+$known = @(@{id='claude:one'; title='Example session'})
+$result = @()
+foreach ($point in @(0x25d0, 0x25d1, 0x25d2, 0x25d3, 0x2733, 0x273b, 0x2801)) {
+    $result += Get-ClaudeTabIdentity (([string][char]$point) + ' Example session') $known
+}
+$result += Get-ClaudeTabIdentity 'Claude Code' $known
+$result += Get-ClaudeTabIdentity 'Example session' $known
+$result += Get-ClaudeTabIdentity (([string][char]0x25d1) + ' Different session') $known
+$result += Get-ClaudeTabIdentity (([string][char]0x25d1) + ' Example session') ($known + @(@{id='claude:two'; title='Example session'}))
+ConvertTo-Json -InputObject $result -Compress
+'''
+        reply = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', command],
+                               capture_output=True, text=True, check=True, timeout=20)
+        results = json.loads(reply.stdout)
+        for result in results[:7]:
+            self.assertEqual(result, {'provider': 'claude', 'claude_session': 'claude:one'})
+        self.assertEqual(results[7]['provider'], 'claude')
+        for result in results[8:]:
+            self.assertIsNone(result['provider'])
+            self.assertIsNone(result['claude_session'])
 
     @unittest.skipUnless(sys.platform == 'win32', 'Windows UI Automation transport')
     def test_metadata_bridge_handles_empty_window_list(self):
