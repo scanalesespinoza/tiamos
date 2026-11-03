@@ -32,7 +32,8 @@ codex-float status
 Each managed terminal has a unique fixed title and a dedicated window. Existing native CLI clients in Windows Terminal are also discovered automatically, including resumed chats whose saved source still says `vscode`. Each tab receives its own avatar and native tab identifier. Double-click selects the exact tab; changing tabs exchanges the full-size avatar even when both tabs share one window.
 
 - Double-click an avatar to restore its terminal. If its managed CLI has exited, double-click resumes the conversation in a new terminal.
-- The selected avatar is 178x152 pixels; others are 89x76 pixels. Switching foreground between bound terminals exchanges the full-size avatar automatically.
+- The foreground CLI session's avatar is 178x152 pixels; others are 89x76 pixels. When no Codex CLI terminal/tab is active, all avatars return to 178x152 pixels. Switching to another application, minimizing or closing the terminal, or selecting a non-CLI tab clears the highlighted session. Returning to a CLI tab restores the size distinction automatically.
+- Closing all terminals keeps today's previously detected companions available at the same normal size. Double-click reopens the corresponding conversation. Sessions from earlier days are excluded.
 - The selected avatar follows the upper-right client area below the title-bar controls. Avatars stay visible when their terminal is minimized, keeping their last on-screen position and showing a gray border. Double-click restores the terminal; the selected avatar resumes docking after restoration. Avatars also remain available on the desktop after the terminal closes.
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.

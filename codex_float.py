@@ -399,24 +399,28 @@ def serve():
                 native.activate(target)
                 associate(ident, target)
                 pending = None
-        if not pending and not bind_request:
-            # Native tab selection distinguishes sessions sharing the same HWND.
-            tab_selected = [ident for ident, entry in widgets.items()
-                if (entry.get('terminal') or {}).get('kind') == 'tab'
-                and entry['terminal'].get('selected') and entry['terminal'].get('hwnd') == foreground
-                and entry['terminal'].get('heartbeat', 0) >= selection_epoch]
-            if len(tab_selected) == 1 and selected != tab_selected[0]:
-                selected = tab_selected[0]
+        valid_bindings = {}
+        for ident, entry in widgets.items():
+            host = bound_window(ident)
+            if not host or not host.visible or host.minimized:
+                continue
+            terminal = entry.get('terminal') or {}
+            if terminal.get('kind') == 'tab':
+                # Do not highlight a CLI from an inactive tab of this window.
+                fresh = terminal.get('heartbeat', 0) >= selection_epoch
+                if (fresh and terminal.get('selected')) or (not fresh and ident == selected):
+                    valid_bindings[ident] = host.hwnd
+            elif terminal.get('live') or bindings.get(ident, {}).get('manual'):
+                valid_bindings[ident] = host.hwnd
+        next_selected = foreground_selection(valid_bindings, foreground, selected)
+        if next_selected != selected:
+            selected = next_selected
+            if selected in widgets:
                 widgets[selected]['docked'] = True
-            valid_bindings = {ident: data['hwnd'] for ident, data in bindings.items() if ident in widgets and bound_window(ident)}
-            next_selected = foreground_selection(valid_bindings, foreground, selected)
-            if next_selected != selected:
-                selected = next_selected
-                if selected in widgets:
-                    widgets[selected]['docked'] = True
         for ident, entry in widgets.items():
             desired = avatar_size(ident, selected)
             full = desired == FULL_SIZE
+            active = ident == selected
             if entry['size'] != desired:
                 entry['size'] = desired
                 entry['window'].geometry(f'{desired[0]}x{desired[1]}')
@@ -427,11 +431,14 @@ def serve():
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
+                elif not active:
+                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
+                    entry['window'].geometry(f'{x:+d}{y:+d}')
             entry['title'].configure(text=entry['chat_title'][:25 if full else 12])
             host = bound_window(ident)
             entry['minimized'] = bool(host and host.minimized)
-            entry['window'].configure(highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if full else '#46536b')
-            if full and entry['docked']:
+            entry['window'].configure(highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if active else '#46536b')
+            if active and entry['docked']:
                 location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
                 if location:
                     entry['window'].geometry(f'{location[0]:+d}{location[1]:+d}')

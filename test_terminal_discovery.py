@@ -1,9 +1,24 @@
 import unittest
 import sys
-from terminal_discovery import match_session, TabBridge
+import datetime as dt
+from terminal_discovery import match_session, TabBridge, keep_daily_sessions
 
 
 class TerminalMatchingTests(unittest.TestCase):
+    def test_closed_today_sessions_remain_available_without_active_selection(self):
+        now = dt.datetime.now().astimezone()
+        records = {
+            'a': {'started_at': now.timestamp(), 'cli_pid': 10, 'selected': True},
+            'b': {'started_at': now.timestamp(), 'cli_pid': 20, 'selected': False},
+            'yesterday': {'started_at': (now - dt.timedelta(days=1)).timestamp(), 'cli_pid': 30},
+        }
+        result = keep_daily_sessions({}, records, set(), now)
+        self.assertEqual(set(result), {'a', 'b'})
+        self.assertTrue(all(not record['live'] and not record['selected'] for record in result.values()))
+        background = keep_daily_sessions({}, records, {10}, now)
+        self.assertTrue(background['a']['live'])
+        self.assertFalse(background['a']['selected'])
+
     def test_resumed_desktop_thread_matches_cli_footer(self):
         threads = [{'id': 'resumed', 'cwd': 'D:\\work', 'name': 'Fix build', 'title': 'old question'}]
         self.assertEqual(match_session({'workspace': 'd:\\work', 'title': 'Fix build'}, threads, {'d:\\work'}), 'resumed')
