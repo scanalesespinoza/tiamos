@@ -50,6 +50,8 @@ Hover over an avatar for a compact detail card without moving keyboard focus awa
 
 The latest assistant progress message appears while the turn is working; the latest reported result appears after completion. These are excerpts of what the session communicated, not an independently verified completion claim or a progress percentage. A check mark means a tool reported successful completion or exit code zero; an exclamation mark means it reported failure. If the latest tool failed, an amber message explains that outcome while preserving the session's working state. A later successful action clears the message; earlier errors remain in the recent history until newer actions replace them. Empty optional sections are hidden.
 
+When a new turn begins, the card also retains the previous completed turn's reported result in a separate section. This makes an unread prior result available alongside current progress. If that turn had no final message, the card says so instead of presenting progress as a final result. Only one bounded, sanitized prior result is retained, in memory; it is excluded from runtime state files.
+
 Move the pointer into the card to read it, choose **Fijar** to keep it open, or close it with **×**. Right-click an avatar and choose **Ver detalles de la sesión** to open it pinned. **Ir a la terminal** selects that session's exact tab. Double-click and dragging keep their existing behavior. Only one detail card opens at a time.
 
 If session updates become unavailable, the card explicitly marks its information as stale and freezes an active turn's observed duration at the last successful update. Historical actions and reported progress remain readable. Normal timing and state return automatically when reading recovers.
