@@ -125,6 +125,8 @@ class Activity:
                     self.objective = safe_preview(message)
                     self.updated_at = stamp.timestamp()
             elif event == 'item_completed':
+                if turn and self.turn_id and turn != self.turn_id:
+                    return
                 item = payload.get('item', {})
                 if not isinstance(item, dict):
                     return
