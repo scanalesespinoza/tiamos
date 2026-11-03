@@ -1,6 +1,12 @@
 """Group placement and collision-aware registration of Windows hotkeys."""
+import ctypes as C
+from ctypes import wintypes as W
 import queue
 import threading
+
+
+class _MonitorInfo(C.Structure):
+    _fields_ = [('size', W.DWORD), ('monitor', W.RECT), ('work', W.RECT), ('flags', W.DWORD)]
 
 
 def arrange(items, area, anchor='top', margin=12, gap=12):
@@ -98,22 +104,16 @@ class GlobalHotkeys:
 
 
 def monitor_work_area(position=None):
-    import ctypes as C
-    from ctypes import wintypes as W
-
-    class MonitorInfo(C.Structure):
-        _fields_ = [('size', W.DWORD), ('monitor', W.RECT), ('work', W.RECT), ('flags', W.DWORD)]
-
     user = C.WinDLL('user32')
     user.MonitorFromPoint.argtypes = [W.POINT, W.DWORD]
     user.MonitorFromPoint.restype = W.HANDLE
-    user.GetMonitorInfoW.argtypes = [W.HANDLE, C.POINTER(MonitorInfo)]
+    user.GetMonitorInfoW.argtypes = [W.HANDLE, C.POINTER(_MonitorInfo)]
     point = W.POINT()
     if position is None:
         user.GetCursorPos(C.byref(point))
     else:
         point.x, point.y = map(int, position)
-    info = MonitorInfo()
+    info = _MonitorInfo()
     info.size = C.sizeof(info)
     if not user.GetMonitorInfoW(user.MonitorFromPoint(point, 2), C.byref(info)):
         raise OSError('No se pudo consultar el area de trabajo del monitor.')
