@@ -106,6 +106,31 @@ class PointerReconciliationTests(unittest.TestCase):
         self.assertIsNone(self.card.ident)
         self.card.refresh.assert_not_called()
 
+    def test_profile_click_survives_reflow_then_can_be_unpinned_and_closed(self):
+        self.card.ident = 'a'
+        self.card.profile = False
+        self.card.window.mapped = True
+        self.card.root.point = (120, 300)
+        self.card.pin_button = Mock()
+        # Switching card contents can move the footer away from the cursor.
+        self.card.refresh = Mock(side_effect=lambda: setattr(self.card.window, 'x', 600))
+        self.card.leave()
+        self.card.toggle_profile()
+        self.card.reconcile_pointer()
+        self.card.root.advance(1000)
+        self.assertEqual(self.card.ident, 'a')
+        self.assertTrue(self.card.profile)
+        self.assertTrue(self.card.pinned)
+        self.assertIsNone(self.card.leave_pending)
+        self.card.toggle_profile()
+        self.card.root.advance(1000)
+        self.assertFalse(self.card.profile)
+        self.assertEqual(self.card.ident, 'a')
+        self.card.toggle_pin()
+        self.card.root.advance(250)
+        self.assertIsNone(self.card.ident)
+        self.assertFalse(self.card.window.mapped)
+
 
 if __name__ == '__main__':
     unittest.main()
