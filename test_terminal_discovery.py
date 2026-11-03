@@ -1,10 +1,43 @@
 import unittest
 import sys
 import datetime as dt
-from terminal_discovery import match_session, TabBridge, keep_daily_sessions
+from types import SimpleNamespace
+from unittest.mock import patch
+from terminal_discovery import match_session, TabBridge, keep_daily_sessions, discovery_signature, TerminalDiscovery
 
 
 class TerminalMatchingTests(unittest.TestCase):
+    def test_inactive_third_tab_is_discovered_without_restarting_monitor(self):
+        clients = [{'pid': i, 'cwd': f'D:\\project{i}', 'terminal_id': str(i)} for i in range(3)]
+        threads = [{'id': str(i), 'cwd': f'D:\\project{i}', 'name': f'Session {i}'} for i in range(3)]
+        tabs = [{'hwnd': 123, 'tab_id': str(i), 'selected': i == 0, 'workspace': f'D:\\project{i}', 'title': f'Session {i}'} for i in range(3)]
+        requests = []
+
+        def scan(request):
+            requests.append(request)
+            return {'tabs': tabs if request['inspect_all'] else [tabs[0], dict(tabs[1], workspace=None, title=None), dict(tabs[2], workspace=None, title=None)]}
+
+        monitor = TerminalDiscovery.__new__(TerminalDiscovery)
+        monitor.bridge = SimpleNamespace(call=scan)
+        monitor.native = SimpleNamespace(all_terminal_windows=lambda: [SimpleNamespace(hwnd=123, pid=42, executable='WindowsTerminal.exe')])
+        monitor.cache = {}
+        monitor.last_scan_signature = None
+        monitor.publish = lambda current, _: current
+        with patch('terminal_discovery.native_clients', side_effect=[clients[:2], clients]), patch('terminal_discovery.idle_seconds', return_value=3), patch('terminal_discovery.save'):
+            self.assertEqual(set(monitor.update(threads)), {'0', '1'})
+            self.assertEqual(set(monitor.update(threads)), {'0', '1', '2'})
+        self.assertTrue(requests[1]['inspect_all'])
+
+    def test_new_cli_and_later_session_metadata_invalidate_existing_window_scan(self):
+        clients = [{'pid': 10, 'cwd': 'D:\\work', 'terminal_id': 'first'}]
+        threads = [{'id': 'a', 'cwd': 'D:\\work', 'name': 'First', 'updated_at': 1}]
+        initial = discovery_signature([123], clients, threads)
+        added = clients + [{'pid': 20, 'cwd': 'D:\\other', 'terminal_id': 'second'}]
+        with_client = discovery_signature([123], added, threads)
+        self.assertNotEqual(initial, with_client)
+        self.assertNotEqual(with_client, discovery_signature([123], added, threads + [{'id': 'b', 'cwd': 'D:\\other', 'name': 'Second'}]))
+        self.assertEqual(initial, discovery_signature([123], clients, [dict(threads[0], updated_at=2)]))
+
     def test_closed_today_sessions_remain_available_without_active_selection(self):
         now = dt.datetime.now().astimezone()
         records = {

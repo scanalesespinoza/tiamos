@@ -168,12 +168,21 @@ def idle_seconds():
     return ((C.windll.kernel32.GetTickCount64() - info.tick) & 0xffffffff) / 1000
 
 
+def discovery_signature(handles, clients, threads):
+    """Invalidate tab inspection when clients or conversation identities change."""
+    return (
+        tuple(sorted(handles)),
+        tuple(sorted((client['pid'], client.get('terminal_id', ''), normalize_cwd(client['cwd'])) for client in clients)),
+        tuple(sorted((thread['id'], thread.get('name') or '', thread.get('title') or '', normalize_cwd(thread['cwd'])) for thread in threads)),
+    )
+
+
 class TerminalDiscovery:
     def __init__(self):
         self.bridge = None
         self.native = Windows()
         self.cache = read(STATE / 'tab-bindings.json', {})
-        self.scanned = set()
+        self.last_scan_signature = None
 
     def close(self):
         if self.bridge:
@@ -190,12 +199,12 @@ class TerminalDiscovery:
         cwds = Counter(normalize_cwd(client['cwd']) for client in clients)
         windows = self.native.all_terminal_windows()
         handles = [window.hwnd for window in windows]
-        signature = tuple(handles)
+        signature = discovery_signature(handles, clients, threads)
         if not handles or not clients:
             return self.publish({}, clients)
         if self.bridge is None:
             self.bridge = TabBridge()
-        inspect_all = signature not in self.scanned and idle_seconds() >= 2
+        inspect_all = signature != self.last_scan_signature and idle_seconds() >= 2
         try:
             reply = self.bridge.call({'mode': 'scan', 'windows': handles, 'inspect_all': inspect_all})
         except (OSError, RuntimeError):
@@ -204,7 +213,7 @@ class TerminalDiscovery:
         if reply.get('error'):
             raise RuntimeError('No se pudieron inspeccionar las pestanas de Windows Terminal.')
         if inspect_all:
-            self.scanned.add(signature)
+            self.last_scan_signature = signature
         by_id = {thread['id']: thread for thread in threads}
         result = {}
         for tab in reply['tabs']:
