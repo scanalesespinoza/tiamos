@@ -544,6 +544,8 @@ def serve():
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
         position_group()
+        if tick_number % 2 == 0:
+            details.reconcile_pointer()
         if tick_number % 10 == 0:
             details.refresh()
         if tick_number % 10 == 0:
