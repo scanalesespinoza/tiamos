@@ -142,7 +142,10 @@ class Activity:
                     label = {'FileChange': 'Edición de archivos', 'ImageView': 'Inspección visual', 'Extension': 'Investigación'}.get(item_kind)
                     label = label or category(item.get('command', ''), item.get('tool', ''))
                     code = item.get('exit_code')
-                    outcome = 'error' if (code is not None and code != 0) or str(item.get('status', '')).lower() == 'failed' else 'ok' if code == 0 or str(item.get('status', '')).lower() == 'completed' else 'info'
+                    result = item.get('result')
+                    reported_error = isinstance(result, dict) and result.get('isError') is True
+                    failed = reported_error or (code is not None and code != 0) or str(item.get('status', '')).lower() in {'failed', 'error'}
+                    outcome = 'error' if failed else 'ok' if code == 0 or str(item.get('status', '')).lower() == 'completed' else 'info'
                     self.add_action(label, stamp, outcome, item.get('id'))
                     self.phase = 'Revisando resultados'
         elif kind == 'response_item':
