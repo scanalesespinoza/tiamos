@@ -40,6 +40,8 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 
 Plain `codex` clients are matched using their live process workspaces and terminal footer metadata. The initial scan inspects inactive tabs once after at least two seconds without user input, then restores the originally selected tab. Later polls inspect the selected tab and reuse validated tab associations. The helper returns only workspace/title metadata and tab identifiers, without saving terminal transcripts or input. Ambiguous matches are left unassigned; the manual binding option remains available for other console hosts. Active unmanaged turns cannot be resumed into a second CLI.
 
+Starting another CLI client or persisting/renaming a conversation automatically refreshes the tab inspection, even inside an existing terminal window. An inactive new tab is discovered after the next two-second input-idle interval; no avatar restart is required. Ordinary turn timestamp updates do not trigger additional inactive-tab inspections.
+
 ## Continue chats from the desktop app
 
 ```powershell
