@@ -6,6 +6,7 @@ Add-Type -AssemblyName UIAutomationTypes
 $ae = [System.Windows.Automation.AutomationElement]
 $scope = [System.Windows.Automation.TreeScope]::Descendants
 $selectPattern = [System.Windows.Automation.SelectionItemPattern]::Pattern
+$mutex = New-Object System.Threading.Mutex($false, 'Local\CodexFloatTerminalTabs')
 
 function Find-Terminal($window) {
     $condition = New-Object System.Windows.Automation.PropertyCondition($ae::ClassNameProperty, 'TermControl')
@@ -13,7 +14,14 @@ function Find-Terminal($window) {
 }
 
 while ($null -ne ($line = [Console]::ReadLine())) {
+    $held = $false
     try {
+        try {
+            $held = $mutex.WaitOne(3000)
+        } catch [System.Threading.AbandonedMutexException] {
+            $held = $true
+        }
+        if (-not $held) { throw 'Terminal metadata query already in progress.' }
         $request = $line | ConvertFrom-Json
         $result = @()
         foreach ($handle in $request.windows) {
@@ -71,5 +79,8 @@ while ($null -ne ($line = [Console]::ReadLine())) {
         [Console]::WriteLine((@{ tabs = @($result) } | ConvertTo-Json -Compress -Depth 5))
     } catch {
         [Console]::WriteLine((@{ tabs = @(); error = $_.Exception.GetType().Name } | ConvertTo-Json -Compress))
+    } finally {
+        if ($held) { $mutex.ReleaseMutex() }
     }
 }
+$mutex.Dispose()
