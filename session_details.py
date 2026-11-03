@@ -3,14 +3,26 @@ import time
 from session_activity import safe_preview, time_text
 
 
-def card_position(anchor, size, area, gap=10):
+def card_position(anchor, size, area, gap=10, obstacles=()):
     left, top, right, bottom = area
     x, y, width, height = anchor
     card_width, card_height = size
-    below = y + height + gap
-    cy = below if below + card_height <= bottom else y - card_height - gap
-    return (max(left, min(x + width // 2 - card_width // 2, right - card_width)),
-        max(top, min(cy, bottom - card_height)))
+    center_x = x + width // 2 - card_width // 2
+    center_y = y + height // 2 - card_height // 2
+    candidates = [(center_x, y + height + gap), (center_x, y - card_height - gap),
+        (x - card_width - gap, center_y), (x + width + gap, center_y)]
+
+    def clamp(point):
+        return (max(left, min(point[0], right - card_width)),
+            max(top, min(point[1], bottom - card_height)))
+
+    def overlap(point):
+        cx, cy = point
+        return sum(max(0, min(cx + card_width, ox + ow) - max(cx, ox)) *
+            max(0, min(cy + card_height, oy + oh) - max(cy, oy))
+            for ox, oy, ow, oh in (anchor, *obstacles))
+
+    return min(map(clamp, candidates), key=overlap)
 
 
 def details_text(chat, now=None):
@@ -250,6 +262,8 @@ class DetailsCard:
         from avatar_layout import monitor_work_area
         area = monitor_work_area((owner.winfo_x() + entry['size'][0] // 2,
             owner.winfo_y() + entry['size'][1] // 2))
+        obstacles = [(other['window'].winfo_x(), other['window'].winfo_y(), *other['size'])
+            for ident, other in self.entries.items() if ident != self.ident and other['window'].winfo_ismapped()]
         location = card_position((owner.winfo_x(), owner.winfo_y(), *entry['size']),
-            (382, self.window.winfo_reqheight()), area)
+            (382, self.window.winfo_reqheight()), area, obstacles=obstacles)
         self.window.geometry(f'382x{self.window.winfo_reqheight()}{location[0]:+d}{location[1]:+d}')
