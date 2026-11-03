@@ -119,6 +119,20 @@ class Windows:
         self.u.EnumWindows(collect, 0)
         return result
 
+    def all_terminal_windows(self):
+        result = []
+
+        @self.callback_type
+        def collect(hwnd, _):
+            if self.u.IsWindowVisible(hwnd):
+                window = self.inspect(hwnd)
+                if window and window.terminal:
+                    result.append(window)
+            return True
+
+        self.u.EnumWindows(collect, 0)
+        return result
+
     def activate(self, window):
         if not window.visible or window.minimized:
             self.u.ShowWindow(window.hwnd, 9)  # SW_RESTORE

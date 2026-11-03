@@ -52,7 +52,7 @@ class CliTests(unittest.TestCase):
     def test_unmanaged_active_turn_is_not_resumed_in_parallel(self):
         ident = '11111111-1111-1111-1111-111111111111'
         with tempfile.TemporaryDirectory() as folder:
-            with patch('cli_sessions.STATE', Path(folder)), patch('cli_sessions.thread_info', return_value={'rollout_path': 'unused'}), patch('cli_sessions.registrations', return_value={}), patch('window_focus.Windows'), patch('codex_float.Trace') as trace, patch('cli_sessions.subprocess.Popen') as spawn:
+            with patch('terminal_discovery.refresh_external'), patch('cli_sessions.STATE', Path(folder)), patch('cli_sessions.thread_info', return_value={'rollout_path': 'unused'}), patch('cli_sessions.registrations', return_value={}), patch('window_focus.Windows'), patch('codex_float.Trace') as trace, patch('cli_sessions.subprocess.Popen') as spawn:
                 trace.return_value.active = {'turn-in-progress'}
                 with self.assertRaisesRegex(RuntimeError, 'turno activo'):
                     launch(ident)
