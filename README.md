@@ -1,41 +1,64 @@
-# Codex Float
+# Codex CLI + floating avatars
 
-Draggable, always-on-top Windows companions for local Codex chats with turn activity today (Windows local date). A terminal GIF types while a turn runs and sleeps after completion. Positions persist per conversation across restarts. Right-click a companion to turn all companions off.
+Run native Codex CLI sessions in independent Windows terminal windows with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Each working turn animates a typing terminal; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
-Double-click a companion to open its exact existing chat using the desktop app's `codex://threads/<id>` link. The selected companion grows to 178 by 152 pixels; all others shrink to 89 by 76 pixels. The selected companion follows the host window's upper-right client area, below the title-bar controls, including when the window moves or resizes. It hides while its host is minimized and reappears on restore. Dragging the selected companion undocks it until you select it again.
+## Install
 
-For a chat hosted in a separate terminal or editor window, right-click its companion, choose **Vincular: elige una ventana en 8 s**, then focus that window. Subsequent double-clicks restore and activate that bound window. Switching focus between distinctly bound work windows exchanges the full-size companion automatically. When several chats share the same generic desktop window title, the last explicitly selected companion identifies the current chat; changing an internal tab without a distinct native title cannot be detected from window focus alone.
-
-The desktop app must be installed to open chat links ([official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links)). A manual binding is valid only while the original host window and process still exist; bind it again after restarting the host. This utility never starts another agent or submits a prompt.
+Requires Windows, Python 3.12 with Tkinter, Pillow, and a signed-in Codex CLI. Windows Terminal is preferred; a standalone console is the fallback.
 
 ```powershell
+npm install -g @openai/codex
+codex login
+python -m pip install -r requirements.txt
+.\install.ps1
+```
+
+The installer writes `codex-float.cmd` into the user's `bin` directory. Keep that directory on PATH. The separately installed npm CLI is preferred. Model, permissions, configuration, and existing hooks are preserved. Normal Codex folder/hook trust prompts still apply; this utility installs no hooks.
+
+## Daily use
+
+```powershell
+codex-float new D:\git\my-project
+codex-float list
+codex-float resume <session-UUID>
 codex-float on
 codex-float off
 codex-float toggle
 codex-float status
 ```
 
-Python 3.12 with Tkinter and Pillow runs the application. Regenerate the included GIFs with `python generate_assets.py`. Starting twice preserves a single instance. No login startup is installed.
+`new` creates a persistent, named conversation through a short-lived local Codex app-server connection, then opens `codex resume <id>` in its own terminal. Creating the conversation does not submit a prompt or model turn. `resume` opens an existing conversation; if its managed terminal is already alive it activates that window instead. A per-session OS lock prevents concurrent managed CLI owners. Launching a session automatically starts the avatars when necessary. `off` stops only the avatars; terminals and agents keep running.
 
-## Install or relocate
+Each managed terminal has a unique fixed title and a dedicated window, so its chat-to-window association is automatic. Keep managed sessions in their dedicated windows; adding or rearranging tabs inside those windows is not tracked.
 
-Clone or move the repository to the desired directory, then run:
+- Double-click an avatar to restore its terminal. If its managed CLI has exited, double-click resumes the conversation in a new terminal.
+- The selected avatar is 178x152 pixels; others are 89x76 pixels. Switching foreground between bound terminals exchanges the full-size avatar automatically.
+- The selected avatar follows the upper-right client area below the title-bar controls. It hides while minimized, returns after restore, and remains available on the desktop after the terminal closes.
+- Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
+- Right-click for terminal activation, manual binding, or **Apagar todos**.
+
+For native CLI sessions started with plain `codex`, the lifecycle reader can show activity, but the window is initially unknown. Use the avatar's manual binding option and focus the existing terminal within eight seconds. An unmanaged active turn cannot be automatically resumed into a second CLI.
+
+## Continue chats from the desktop app
 
 ```powershell
-python -m pip install -r requirements.txt
-.\install.ps1
-codex-float on
+codex-float list --all
+codex-float resume <session-UUID>
 ```
 
-The installer writes `codex-float.cmd` into the user's `bin` directory, pointing to this checkout and the selected Python interpreter. Keep that directory on PATH. Before relocating an existing installation, run `codex-float off`; rerun `install.ps1` from the new location. Runtime state and saved positions stay outside the repository.
+Wait for the original turn to finish before moving the conversation to the CLI. Desktop chats are hidden from the avatar view until resumed through the launcher. The utility does not close the desktop app or stop its work. WSL sessions in a separate Linux home are not included.
 
-## Verify
+## State and maintenance
+
+The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle events every two seconds. It excludes archived threads and subagents without retaining prompts or command output. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
+
+Runtime state lives in `%LOCALAPPDATA%/CodexFloat`: positions, window bindings, CLI registrations, per-session locks, heartbeat, and startup errors. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
+
+Before relocating, stop avatars and finish managed CLI sessions, move the repository, then rerun `install.ps1`. No login startup is installed. To uninstall, stop avatars and managed sessions, then remove the launcher and checkout.
 
 ```powershell
 python -m unittest discover -s . -p "test_*.py" -v
-codex-float status
+python generate_assets.py
 ```
 
-The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced rollout lifecycle events every two seconds. It excludes archived chats and subagents. Chat content is not retained or sent anywhere. Titles are displayed locally. The internal Codex schema is version-specific; unavailable sources produce a visible disconnected state and an error in `status`, rather than pretending all chats are asleep. A trace lacking a completion or interruption event can retain a working state after an unclean Codex shutdown.
-
-Runtime files: `%LOCALAPPDATA%/CodexFloat` (positions, heartbeat, lock, stop request, startup errors). To uninstall, run `codex-float off`, then remove the launcher and this application folder. Position files may be retained for reinstall.
+References: [CLI commands](https://learn.chatgpt.com/docs/developer-commands), [local app-server protocol](https://learn.chatgpt.com/docs/app-server), [Windows Terminal arguments](https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments).
