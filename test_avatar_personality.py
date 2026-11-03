@@ -2,7 +2,7 @@ import copy
 import datetime as dt
 import unittest
 
-from avatar_personality import COLORS, STATES, Notices, identity, render_frames, visual_state
+from avatar_personality import COLORS, STATES, Notices, customize, identity, render_frames, visual_state
 from session_activity import Activity
 
 
@@ -33,6 +33,22 @@ class PersonalityTests(unittest.TestCase):
         self.assertFalse(restored.acknowledge('session'))
         self.assertFalse(Notices(copy.deepcopy(restored.records)).pending('session'))
         self.assertFalse(restored.pending('unknown'))
+
+    def test_customization_preserves_other_choice_survives_reload_and_resets_without_collision(self):
+        registry = {}
+        original_color, original_accessory = identity('session', registry)
+        self.assertEqual(customize('session', registry, color=2), (COLORS[2], original_accessory))
+        self.assertEqual(customize('session', registry, accessory=3), (COLORS[2], 3))
+        self.assertEqual(identity('session', dict(registry)), (COLORS[2], 3))
+        original_slot = original_accessory * len(COLORS) + COLORS.index(original_color)
+        registry['other'] = original_slot
+        reset = customize('session', registry, reset=True)
+        self.assertNotEqual(reset, identity('other', registry))
+        self.assertEqual(registry['other'], original_slot)
+        before = dict(registry)
+        with self.assertRaises(ValueError):
+            customize('session', registry, color=99)
+        self.assertEqual(registry, before)
 
     def test_new_result_celebrates_once_and_later_work_preserves_unread_result(self):
         notices = Notices()

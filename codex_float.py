@@ -171,7 +171,7 @@ class Reader:
 def serve():
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
-    from avatar_personality import Notices, identity, render_frames, visual_state
+    from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
     from PIL import Image, ImageTk
     import ctypes
     import msvcrt
@@ -409,6 +409,33 @@ def serve():
         menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
         menu.add_separator()
+        appearance_menu = tk.Menu(menu, tearoff=False)
+        color_choice = tk.IntVar(value=COLORS.index(accent))
+        accessory_choice = tk.IntVar(value=accessory)
+
+        def change_appearance(reset=False):
+            accent, accessory = customize(ident, identities, color_choice.get(), accessory_choice.get(), reset=reset)
+            atomic_json(STATE / 'identities.json', identities)
+            color_choice.set(COLORS.index(accent))
+            accessory_choice.set(accessory)
+            entry.update(accent=accent, accessory=accessory, frame=0)
+            entry['title'].configure(fg=accent)
+            entry['animations'].clear()
+            visual = entry['visual'] or visual_state(entry['chat'])
+            entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
+            details.refresh()
+
+        color_menu = tk.Menu(appearance_menu, tearoff=False)
+        for index, name in enumerate(COLOR_NAMES):
+            color_menu.add_radiobutton(label=name, variable=color_choice, value=index, command=change_appearance)
+        appearance_menu.add_cascade(label='Color', menu=color_menu)
+        accessory_menu = tk.Menu(appearance_menu, tearoff=False)
+        for index, name in enumerate(ACCESSORIES):
+            accessory_menu.add_radiobutton(label=name, variable=accessory_choice, value=index, command=change_appearance)
+        appearance_menu.add_cascade(label='Accesorio', menu=accessory_menu)
+        appearance_menu.add_separator()
+        appearance_menu.add_command(label='Restablecer aspecto automático', command=lambda: change_appearance(reset=True))
+        menu.add_cascade(label='Personalizar compañero', menu=appearance_menu)
         for anchor, placement_label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
