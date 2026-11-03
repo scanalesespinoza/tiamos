@@ -127,6 +127,7 @@ class DetailsCard:
         self.location = None
         self.profile = False
         self.graphical = True
+        self.hover_suspended = False
         self.window = tk.Toplevel(root)
         self.window.withdraw()
         self.window.title('Codex Float · Detalles')
@@ -202,7 +203,7 @@ class DetailsCard:
 
     def request(self, ident):
         self.cancel_leave()
-        if any(entry.get('drag') for entry in self.entries.values()) or self.pinned or ident == self.ident or ident == self.target:
+        if self.hover_suspended or any(entry.get('drag') for entry in self.entries.values()) or self.pinned or ident == self.ident or ident == self.target:
             return
         self.cancel_request()
         self.target = ident
@@ -225,7 +226,7 @@ class DetailsCard:
 
     def reconcile_pointer(self):
         """Native moves/resizes do not always deliver Tk crossing events."""
-        if self.pinned:
+        if self.hover_suspended or self.pinned:
             return
         if self.ident and self.contains_pointer(self.window):
             self.cancel_leave()
@@ -253,6 +254,8 @@ class DetailsCard:
     def show(self, ident, pinned=False, profile=False):
         self.cancel_request()
         self.cancel_leave()
+        if self.hover_suspended and not pinned:
+            return
         if ident not in self.entries:
             return
         if not pinned and not self.contains_pointer(self.entries[ident]['window']):
@@ -273,6 +276,20 @@ class DetailsCard:
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
         if not self.pinned:
             self.leave()
+
+    def popup_menu(self, menu, x, y):
+        # Windows tracks the native menu (including cascades) inside tk_popup.
+        # Its nested event loop still runs hover timers and pointer reconciliation.
+        self.hover_suspended = True
+        self.hide()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            try:
+                menu.grab_release()
+            finally:
+                self.hover_suspended = False
+        return 'break'  # Do not reopen the same menu via the toplevel event binding.
 
     def toggle_profile(self):
         # Explicit navigation must survive resize/reflow away from the pointer.

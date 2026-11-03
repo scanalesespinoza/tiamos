@@ -54,6 +54,7 @@ class PointerReconciliationTests(unittest.TestCase):
         self.card.window = Surface(100, 270, 382, 400, mapped=False)
         self.card.ident = self.card.target = self.card.pending = self.card.leave_pending = None
         self.card.pinned = False
+        self.card.hover_suspended = False
 
     def test_reflow_under_stationary_pointer_opens_once_after_hover_delay(self):
         self.card.root.point = (50, 150)
@@ -105,6 +106,39 @@ class PointerReconciliationTests(unittest.TestCase):
         self.card.show('a')
         self.assertIsNone(self.card.ident)
         self.card.refresh.assert_not_called()
+
+    def test_menu_cancels_hover_and_blocks_timers_until_dismissal(self):
+        self.card.root.point = (120, 120)
+        self.card.refresh = Mock()
+        self.card.request('a')
+        self.assertIsNotNone(self.card.pending)
+        def track_menu(*_):
+            self.assertTrue(self.card.hover_suspended)
+            self.assertFalse(self.card.window.mapped)
+            self.card.request('a')
+            self.card.reconcile_pointer()
+            self.card.root.advance(2000)
+            self.card.show('a')  # Even an already dispatched callback is blocked.
+            self.card.refresh.assert_not_called()
+            self.assertIsNone(self.card.pending)
+            self.assertIsNone(self.card.ident)
+        menu = Mock(tk_popup=Mock(side_effect=track_menu))
+        self.assertEqual(self.card.popup_menu(menu, 100, 100), 'break')
+        menu.grab_release.assert_called_once()
+        self.assertFalse(self.card.hover_suspended)
+        self.card.show = Mock()
+        self.card.reconcile_pointer()
+        self.card.root.advance(449)
+        self.card.show.assert_not_called()
+        self.card.root.advance(1)
+        self.card.show.assert_called_once_with('a')
+
+    def test_menu_failure_does_not_leave_hover_disabled(self):
+        menu = Mock(tk_popup=Mock(side_effect=RuntimeError('Menu failed')))
+        with self.assertRaises(RuntimeError):
+            self.card.popup_menu(menu, 100, 100)
+        self.assertFalse(self.card.hover_suspended)
+        menu.grab_release.assert_called_once()
 
     def test_profile_click_survives_reflow_then_can_be_unpinned_and_closed(self):
         self.card.ident = 'a'
