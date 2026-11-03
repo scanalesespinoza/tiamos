@@ -1,0 +1,117 @@
+"""Group placement and collision-aware registration of Windows hotkeys."""
+import queue
+import threading
+
+
+def arrange(items, area, anchor='top', margin=12, gap=12):
+    """Pack variable-size companions into centered rows or edge columns."""
+    left, top, right, bottom = area
+    horizontal = anchor == 'top'
+    available = (right - left if horizontal else bottom - top) - 2 * margin
+    lines = []
+    current = []
+    used = 0
+    for ident, width, height in items:
+        extent = width if horizontal else height
+        if current and used + gap + extent > available:
+            lines.append(current)
+            current, used = [], 0
+        used += (gap if current else 0) + extent
+        current.append((ident, width, height))
+    if current:
+        lines.append(current)
+    positions = {}
+    cross = top + margin if horizontal else right - margin if anchor == 'right' else left + margin
+    for line in lines:
+        length = sum(item[1 if horizontal else 2] for item in line) + gap * (len(line) - 1)
+        along = (left + (right - left - length) // 2) if horizontal else (top + (bottom - top - length) // 2)
+        thickness = max(item[2 if horizontal else 1] for item in line)
+        for ident, width, height in line:
+            x = along if horizontal else cross - width if anchor == 'right' else cross
+            y = cross if horizontal else along
+            positions[ident] = (x, y)
+            along += (width if horizontal else height) + gap
+        cross += thickness + gap if horizontal or anchor == 'left' else -(thickness + gap)
+    return positions
+
+
+KEYS = [('top', 0x26, 'Up'), ('right', 0x27, 'Right'), ('left', 0x25, 'Left')]
+
+
+def register_available(register, unregister):
+    for modifiers, label in [(0x4003, 'Ctrl+Alt'), (0x4007, 'Ctrl+Alt+Shift')]:
+        held = []
+        for index, (_, key, _) in enumerate(KEYS):
+            ident = 0x7a10 + index
+            if not register(ident, modifiers, key):
+                break
+            held.append(ident)
+        if len(held) == len(KEYS):
+            return held, {anchor: f'{label}+{name}' for anchor, _, name in KEYS}
+        for ident in held:
+            unregister(ident)
+    return [], {}
+
+
+class GlobalHotkeys:
+    def __init__(self):
+        self.events = queue.Queue()
+        self.stop = threading.Event()
+        self.ready = threading.Event()
+        self.labels = {}
+        self.error = None
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+        self.ready.wait(2)
+
+    def run(self):
+        import ctypes as C
+        from ctypes import wintypes as W
+        held = []
+        user = C.WinDLL('user32', use_last_error=True)
+        user.RegisterHotKey.argtypes = [W.HWND, C.c_int, W.UINT, W.UINT]
+        user.UnregisterHotKey.argtypes = [W.HWND, C.c_int]
+        user.PeekMessageW.argtypes = [C.POINTER(W.MSG), W.HWND, W.UINT, W.UINT, W.UINT]
+        try:
+            held, self.labels = register_available(
+                lambda ident, modifiers, key: user.RegisterHotKey(None, ident, modifiers, key),
+                lambda ident: user.UnregisterHotKey(None, ident))
+            if not held:
+                self.error = 'Atajos de flechas ocupados; utiliza el menu de posicion.'
+            self.ready.set()
+            message = W.MSG()
+            while not self.stop.wait(.03):
+                while user.PeekMessageW(C.byref(message), None, 0x312, 0x312, 1):
+                    index = int(message.wParam) - 0x7a10
+                    if 0 <= index < len(KEYS):
+                        self.events.put(KEYS[index][0])
+        except Exception as error:
+            self.error = f'No se pudieron registrar los atajos: {error}'
+            self.ready.set()
+        finally:
+            for ident in held:
+                user.UnregisterHotKey(None, ident)
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(timeout=2)
+
+
+def monitor_work_area():
+    import ctypes as C
+    from ctypes import wintypes as W
+
+    class MonitorInfo(C.Structure):
+        _fields_ = [('size', W.DWORD), ('monitor', W.RECT), ('work', W.RECT), ('flags', W.DWORD)]
+
+    user = C.WinDLL('user32')
+    user.MonitorFromPoint.argtypes = [W.POINT, W.DWORD]
+    user.MonitorFromPoint.restype = W.HANDLE
+    user.GetMonitorInfoW.argtypes = [W.HANDLE, C.POINTER(MonitorInfo)]
+    point = W.POINT()
+    user.GetCursorPos(C.byref(point))
+    info = MonitorInfo()
+    info.size = C.sizeof(info)
+    if not user.GetMonitorInfoW(user.MonitorFromPoint(point, 2), C.byref(info)):
+        raise OSError('No se pudo consultar el area de trabajo del monitor.')
+    return info.work.left, info.work.top, info.work.right, info.work.bottom
