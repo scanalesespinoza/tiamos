@@ -96,6 +96,16 @@ class ActivityTests(unittest.TestCase):
         self.assertFalse(detail['alert'])
         self.assertIn('! Pruebas', detail['actions'])
 
+    def test_connector_error_flag_overrides_completed_transport_without_retaining_output(self):
+        for index, (result, expected) in enumerate([
+            ({'isError': True, 'content': 'PRIVATE OUTPUT'}, 'error'),
+            ({'isError': False, 'content': 'PRIVATE OUTPUT'}, 'ok'),
+            (None, 'ok'), ('PRIVATE OUTPUT', 'ok')]):
+            self.observe('item_completed', item={'type': 'McpToolCall', 'id': str(index),
+                'status': 'completed', 'tool': 'read_file', 'result': result})
+            self.assertEqual(self.activity.actions[0]['outcome'], expected)
+            self.assertNotIn('PRIVATE', json.dumps(self.activity.summary()))
+
     def test_unavailable_session_marks_stale_data_and_freezes_observed_duration(self):
         chat = {'state': 'working', 'unavailable': True, 'observed_at': 170,
             'activity': {'started_at': 100, 'updated_at': 160, 'phase': 'Analizando',
