@@ -41,7 +41,7 @@ def arrange(items, area, anchor='top', margin=12, gap=12):
     return positions
 
 
-KEYS = [('top', 0x26, 'Up'), ('right', 0x27, 'Right'), ('left', 0x25, 'Left')]
+KEYS = [('top', 0x26, 'Up'), ('right', 0x27, 'Right'), ('left', 0x25, 'Left'), ('toggle_visibility', 0x28, 'Down')]
 
 
 def register_available(register, unregister):
@@ -83,7 +83,7 @@ class GlobalHotkeys:
                 lambda ident, modifiers, key: user.RegisterHotKey(None, ident, modifiers, key),
                 lambda ident: user.UnregisterHotKey(None, ident))
             if not held:
-                self.error = 'Atajos de flechas ocupados; utiliza el menu de posicion.'
+                self.error = 'Atajos de flechas ocupados; utiliza el menú de los avatares.'
             self.ready.set()
             message = W.MSG()
             while not self.stop.wait(.03):

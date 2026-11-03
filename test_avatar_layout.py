@@ -39,8 +39,24 @@ class LayoutTests(unittest.TestCase):
             return not (modifiers == 0x4003 and key == 0x27)
         held, labels = register_available(register, released.append)
         self.assertEqual(released, [0x7a10])
-        self.assertEqual(len(held), 3)
+        self.assertEqual(len(held), 4)
         self.assertTrue(all(label.startswith('Ctrl+Alt+Shift+') for label in labels.values()))
+
+    def test_down_toggle_registers_without_key_repeat_and_releases_collisions(self):
+        calls, released = [], []
+        def register(ident, modifiers, key):
+            calls.append((ident, modifiers, key))
+            return not (modifiers == 0x4003 and key == 0x28)
+        held, labels = register_available(register, released.append)
+        self.assertEqual(released, [0x7a10, 0x7a11, 0x7a12])
+        self.assertEqual(len(held), 4)
+        self.assertEqual(labels['toggle_visibility'], 'Ctrl+Alt+Shift+Down')
+        self.assertTrue(all(modifiers & 0x4000 for _, modifiers, _ in calls))
+
+    def test_preferred_group_includes_down_visibility_toggle(self):
+        held, labels = register_available(lambda *_: True, lambda _: None)
+        self.assertEqual(len(held), 4)
+        self.assertEqual(labels['toggle_visibility'], 'Ctrl+Alt+Down')
 
 
 if __name__ == '__main__':
