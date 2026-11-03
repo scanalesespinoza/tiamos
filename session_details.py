@@ -3,7 +3,7 @@ import time
 from session_activity import safe_preview, time_text
 
 
-def card_position(anchor, size, area, gap=10, obstacles=()):
+def card_position(anchor, size, area, gap=10, obstacles=(), preferred=None):
     left, top, right, bottom = area
     x, y, width, height = anchor
     card_width, card_height = size
@@ -22,6 +22,8 @@ def card_position(anchor, size, area, gap=10, obstacles=()):
             max(0, min(cy + card_height, oy + oh) - max(cy, oy))
             for ox, oy, ow, oh in (anchor, *obstacles))
 
+    if preferred is not None and clamp(preferred) == preferred and overlap(preferred) == 0:
+        return preferred
     return min(map(clamp, candidates), key=overlap)
 
 
@@ -108,6 +110,8 @@ class DetailsCard:
         self.leave_pending = None
         self.target = None
         self.signature = None
+        self.placement_context = None
+        self.location = None
         self.window = tk.Toplevel(root)
         self.window.withdraw()
         self.window.title('Codex Float · Detalles')
@@ -225,6 +229,7 @@ class DetailsCard:
             return
         self.ident, self.pinned = ident, pinned
         self.signature = None
+        self.placement_context = self.location = None
         self.refresh()
         self.no_activate()
         self.window.deiconify()
@@ -281,6 +286,9 @@ class DetailsCard:
             owner.winfo_y() + entry['size'][1] // 2))
         obstacles = [(other['window'].winfo_x(), other['window'].winfo_y(), *other['size'])
             for ident, other in self.entries.items() if ident != self.ident and other['window'].winfo_ismapped()]
-        location = card_position((owner.winfo_x(), owner.winfo_y(), *entry['size']),
-            (382, self.window.winfo_reqheight()), area, obstacles=obstacles)
+        anchor = (owner.winfo_x(), owner.winfo_y(), *entry['size'])
+        context = (anchor, area, tuple(obstacles))
+        location = card_position(anchor, (382, self.window.winfo_reqheight()), area,
+            obstacles=obstacles, preferred=self.location if context == self.placement_context else None)
+        self.placement_context, self.location = context, location
         self.window.geometry(f'382x{self.window.winfo_reqheight()}{location[0]:+d}{location[1]:+d}')
