@@ -61,6 +61,7 @@ class TabBridge:
             '-File', str(BASE / 'terminal_tabs.ps1')], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
         self.responses = queue.Queue()
+        self.ready = False
 
         def drain():
             for line in self.process.stdout:
@@ -76,7 +77,10 @@ class TabBridge:
         self.process.stdin.write(json.dumps(request) + '\n')
         self.process.stdin.flush()
         try:
-            return self.responses.get(timeout=5)
+            # Cold PowerShell/.NET assembly loading can exceed a normal query.
+            response = self.responses.get(timeout=5 if self.ready else 15)
+            self.ready = True
+            return response
         except queue.Empty:
             self.close()
             raise RuntimeError('Windows Terminal no respondio a la consulta de pestanas.')
