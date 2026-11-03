@@ -22,6 +22,9 @@ def safe_preview(text, limit=180):
         return 'Contenido sensible omitido. Consulta la terminal.'
     text = re.sub(r'```[\s\S]*?(?:```|$)', '[código omitido]', text)
     text = re.sub(r'`[^`\n]+`', '[código]', text)
+    text = re.sub(r'!?\[([^\]\n]+)\]\([^\)\n]*\)', r'\1', text)
+    text = re.sub(r'(\*\*|__)(.+?)\1', r'\2', text)
+    text = re.sub(r'(?m)^\s{0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)', '', text)
     text = re.sub(r'https?://\S+', '[enlace]', text)
     text = re.sub(r'\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b', '[correo]', text)
     text = re.sub(r'(["\'])(?:[A-Za-z]:[\\/]|/(?:home|Users|tmp|var)/)[^"\']+\1', '[ruta]', text)

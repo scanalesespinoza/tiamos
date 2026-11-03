@@ -79,6 +79,12 @@ class ActivityTests(unittest.TestCase):
         self.assertIn('Then review the result', preview)
         self.assertNotIn('PRIVATE', safe_preview('Before ```bash\nPRIVATE unfinished block'))
 
+    def test_markdown_prose_is_readable_without_exposing_link_destinations(self):
+        source = '## Result\n- **Validation passed** in [the report](https://example.invalid/private).\n1. __Ready__ for review.'
+        self.assertEqual(safe_preview(source), 'Result Validation passed in the report. Ready for review.')
+        self.assertEqual(safe_preview('The expression 2 * 3 remains unchanged.'), 'The expression 2 * 3 remains unchanged.')
+        self.assertNotIn('EXAMPLE', safe_preview('[report](https://example.invalid/?password=EXAMPLE)'))
+
     def test_loop_feature_requests_are_not_mistaken_for_continuation(self):
         self.assertFalse(is_control_request('Loop animations should stay smooth'))
         self.assertFalse(is_control_request('Continue improving the messages'))
