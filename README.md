@@ -38,6 +38,16 @@ Each managed terminal has a unique fixed title and a dedicated window. Existing 
 - Dragging a selected avatar undocks it until reselection. Positions persist across avatar restarts.
 - Right-click for terminal activation, manual binding, or **Apagar todos**.
 
+## Understand each session
+
+Hover over an avatar for a compact detail card without moving keyboard focus away from the terminal. The card shows the project, current objective, working/resting state, turn duration, latest observed activity, and up to three recent tool outcomes. The floating caption summarizes the current observed phase, such as editing, validation, or investigation.
+
+The latest assistant progress message appears while the turn is working; the latest reported result appears after completion. These are excerpts of what the session communicated, not an independently verified completion claim or a progress percentage. A check mark means a tool reported successful completion or exit code zero; an exclamation mark means it reported failure. Earlier errors remain visible until newer actions replace them.
+
+Move the pointer into the card to read it, choose **Fijar** to keep it open, or close it with **×**. Right-click an avatar and choose **Ver detalles de la sesión** to open it pinned. **Ir a la terminal** selects that session's exact tab. Double-click and dragging keep their existing behavior. Only one detail card opens at a time.
+
+Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Raw commands, command output, and reasoning content are never displayed in the card. `codex-float status` includes only fixed activity categories, timestamps, counters, and card state.
+
 ## Group placement and global shortcuts
 
 New companions default to a centered row at the top of the monitor, with spacing based on their actual size and additional rows when needed. Adding sessions or changing the active session reflows the automatic group. Dragging a companion removes it from automatic placement and preserves its position across restarts.
@@ -69,7 +79,7 @@ Wait for the original turn to finish before moving the conversation to the CLI. 
 
 ## State and maintenance
 
-The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle events every two seconds. It excludes archived threads and subagents without retaining prompts or command output. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
+The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle and activity events every two seconds. It excludes archived threads and subagents. Only bounded, sanitized objective/progress excerpts are retained in memory for the detail card; command output and reasoning content are not retained. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
 
 Runtime state lives in `%LOCALAPPDATA%/CodexFloat`: positions, window bindings, CLI registrations, per-session locks, heartbeat, and startup errors. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
 
