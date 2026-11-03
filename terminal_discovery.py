@@ -51,7 +51,7 @@ def keep_daily_sessions(current, previous, live_pids, now=None):
             continue
         owners = record.get('cli_pids', [record.get('cli_pid')])
         live = any(pid in live_pids for pid in owners)
-        result[ident] = dict(record, live=live, running=live, selected=False)
+        result[ident] = dict(record, live=live, running=live, selected=False, heartbeat=now.timestamp())
     return result
 
 
