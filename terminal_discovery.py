@@ -42,6 +42,19 @@ def match_session(tab, threads, live_cwds):
     return recent[0]['id'] if len(recent) == 1 else None
 
 
+def keep_daily_sessions(current, previous, live_pids, now=None):
+    now = now or dt.datetime.now().astimezone()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    result = dict(current)
+    for ident, record in previous.items():
+        if ident in result or record.get('started_at', 0) < midnight:
+            continue
+        owners = record.get('cli_pids', [record.get('cli_pid')])
+        live = any(pid in live_pids for pid in owners)
+        result[ident] = dict(record, live=live, running=live, selected=False)
+    return result
+
+
 class TabBridge:
     def __init__(self):
         self.process = subprocess.Popen(['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive',
@@ -166,6 +179,12 @@ class TerminalDiscovery:
         if self.bridge:
             self.bridge.close()
 
+    def publish(self, current, clients):
+        previous = read(STATE / 'external-cli.json', {}).get('sessions', {})
+        result = keep_daily_sessions(current, previous, {client['pid'] for client in clients})
+        save(STATE / 'external-cli.json', {'heartbeat': time.time(), 'sessions': result})
+        return result
+
     def update(self, threads):
         clients = native_clients()
         cwds = Counter(normalize_cwd(client['cwd']) for client in clients)
@@ -173,8 +192,7 @@ class TerminalDiscovery:
         handles = [window.hwnd for window in windows]
         signature = tuple(handles)
         if not handles or not clients:
-            save(STATE / 'external-cli.json', {'heartbeat': time.time(), 'sessions': {}})
-            return {}
+            return self.publish({}, clients)
         if self.bridge is None:
             self.bridge = TabBridge()
         inspect_all = signature not in self.scanned and idle_seconds() >= 2
@@ -206,11 +224,10 @@ class TerminalDiscovery:
             result[ident] = {'id': ident, 'kind': 'tab', 'live': True, 'running': True,
                 'heartbeat': time.time(), 'started_at': time.time(), 'hwnd': host.hwnd,
                 'window_pid': host.pid, 'executable': host.executable, 'tab_id': tab['tab_id'],
-                'selected': tab['selected'], 'cli_pid': owner_pid}
+                'selected': tab['selected'], 'cli_pid': owner_pid, 'cli_pids': [client['pid'] for client in owners]}
             self.cache[key] = {'id': ident, 'cli_pids': [client['pid'] for client in owners]}
         save(STATE / 'tab-bindings.json', self.cache)
-        save(STATE / 'external-cli.json', {'heartbeat': time.time(), 'sessions': result})
-        return result
+        return self.publish(result, clients)
 
 
 def refresh_external():
