@@ -1,8 +1,23 @@
 import unittest
-from avatar_layout import arrange, register_available
+from avatar_layout import arrange, register_available, menu_after
 
 
 class LayoutTests(unittest.TestCase):
+    def test_group_control_packs_last_and_survives_an_empty_group(self):
+        for anchor in ('top', 'right', 'left'):
+            packed = arrange([('a', 178, 152), ('menu', 36, 36)], (0, 0, 800, 600), anchor)
+            axis = 0 if anchor == 'top' else 1
+            self.assertGreater(packed['menu'][axis], packed['a'][axis])
+            self.assertIn('menu', arrange([('menu', 36, 36)], (0, 0, 800, 600), anchor))
+
+    def test_control_follows_manual_avatars_without_covering_them(self):
+        rectangles = [(300, 200, 178, 152), (600, 500, 178, 76)]
+        for anchor in ('top', 'left', 'right'):
+            x, y = menu_after(rectangles, (0, 0, 800, 600), anchor)
+            self.assertTrue(0 <= x <= 764 and 0 <= y <= 564)
+            self.assertTrue(all(not (x < ox + w and x + 36 > ox and y < oy + h and y + 36 > oy)
+                                for ox, oy, w, h in rectangles))
+
     def test_top_center_adapts_to_actual_avatar_sizes(self):
         items = [('a', 178, 152), ('b', 89, 76), ('c', 89, 76)]
         result = arrange(items, (0, 0, 1920, 1080))

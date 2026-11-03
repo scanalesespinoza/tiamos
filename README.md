@@ -59,6 +59,17 @@ codex-float theme reset
 
 The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `codex-float status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
 
+## Group menu and previous sessions
+
+A 36-pixel circular **⋮** button follows the end of the automatic avatar group, including wrapped rows/columns. For a fully manual group it stays near the last companion, avoiding overlap where space permits. It remains available when avatars are hidden or there are no sessions. The button is a control, not an extra session.
+
+- **Ocultar avatares / Mostrar avatares** toggles the whole group. Ctrl+Alt+Down uses the same state; the circle stays visible to restore the group.
+- **Avatares visibles** chooses individual companions. These choices persist across restarts and are preserved while the whole group is hidden.
+- **Sesiones anteriores…** opens a searchable list of available local sessions with date, provider, and title. Select a row and choose **Mostrar avatar** (or double-click the row). This adds its avatar without opening or resuming a CLI. Double-click the avatar separately to activate/resume its terminal using the existing live-client safeguards.
+- **Volver a sesiones de hoy** removes explicit historical additions; today's sessions remain. Historical additions persist across restarts until cleared.
+
+The history list is loaded only on request, in a short-lived background worker, with no recurring history scan. It reads up to 200 unarchived top-level Codex metadata rows and up to 200 recent main-session Claude files, inspecting at most 5,000 file entries per configuration root and only the first/last 64 KiB of each selected file. It excludes missing Codex logs, Claude records without usable session/workspace metadata, nested subagents, and ambiguous Claude UUIDs across roots. It does not retain conversation prose, tool output, or commands. Some Claude titles or records outside those bounded metadata samples may be unavailable. Already shown sessions are managed from **Avatares visibles** rather than duplicated in history. Visibility selections live in `visibility.json`; explicit historical identities/workspaces live in `shown-history.json`, both under the local runtime directory.
+
 ## Session levels and a compact team profile
 
 Each avatar displays its session level (`N1`, `N2`, etc.) in the existing title and a two-pixel XP progress bar. Avatar dimensions remain 178×152 / 89×76; there is no additional desktop window or animation. Hover and choose **Perfil · XP**, or right-click **Perfil · nivel y estadísticas**, to replace the activity card with a compact profile. Clicking **Perfil · XP** pins the card so resizing or moving the pointer cannot dismiss it. **Actividad** switches back and keeps it pinned; use **×** to close or **Fijada** to restore hover dismissal. Opening only the profile does not acknowledge an unread work result.

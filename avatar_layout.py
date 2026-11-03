@@ -3,6 +3,7 @@ import ctypes as C
 from ctypes import wintypes as W
 import queue
 import threading
+from itertools import chain
 
 
 class _MonitorInfo(C.Structure):
@@ -42,6 +43,22 @@ def arrange(items, area, anchor='top', margin=12, gap=12):
 
 
 KEYS = [('top', 0x26, 'Up'), ('right', 0x27, 'Right'), ('left', 0x25, 'Left'), ('toggle_visibility', 0x28, 'Down')]
+
+
+def menu_after(rectangles, area, anchor='top', size=36, gap=12):
+    """Attach the control to a manually placed group without covering a companion."""
+    left, top, right, bottom = area
+    x, y, width, height = rectangles[-1]
+    trailing = (x + width + gap, y) if anchor == 'top' else (x + width - size if anchor == 'right' else x, y + height + gap)
+    candidates = [trailing, (x - size - gap, y), (x, y - size - gap), (x + width + gap, y)]
+    candidates = chain(candidates, ((cx, cy) for cy in range(top + gap, bottom - size, size + gap)
+                                   for cx in range(left + gap, right - size, size + gap)))
+    for cx, cy in candidates:
+        cx, cy = max(left, min(cx, right - size)), max(top, min(cy, bottom - size))
+        if all(not (cx < ox + ow and cx + size > ox and cy < oy + oh and cy + size > oy)
+               for ox, oy, ow, oh in rectangles):
+            return cx, cy
+    return left, top
 
 
 def register_available(register, unregister):

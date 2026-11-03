@@ -96,13 +96,14 @@ class Trace:
 
 
 class Reader:
-    def __init__(self, codex=CODEX, cli_only=False, registration_loader=registrations, discover=False):
+    def __init__(self, codex=CODEX, cli_only=False, registration_loader=registrations, discover=False, included_loader=None):
         self.codex = codex
         self.traces = {}
         self.cli_only = cli_only
         self.registration_loader = registration_loader
         self.discovery = None
         self.claude = None
+        self.included_loader = included_loader or (lambda: {})
         if discover:
             from terminal_discovery import TerminalDiscovery
             from claude_sessions import ClaudeSessions
@@ -116,6 +117,7 @@ class Reader:
     def snapshot(self, now=None):
         now = now or dt.datetime.now().astimezone()
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        included = self.included_loader()
         terminals = self.registration_loader() if self.cli_only else {}
         terminals = {ident: record for ident, record in terminals.items() if record.get('started_at', 0) >= midnight}
         db = self.codex / 'state_5.sqlite'
@@ -137,20 +139,26 @@ class Reader:
                     rows = connection.execute(f'''SELECT {fields}
                         FROM threads WHERE archived=0 AND (updated_at>=?{extra})
                         AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
+                missing = [ident for ident, record in included.items() if record.get('provider') == 'codex'
+                           and ident not in {row[0] for row in rows}]
+                if missing:
+                    placeholders = ','.join('?' for _ in missing)
+                    rows.extend(connection.execute(f'''SELECT {fields} FROM threads WHERE archived=0
+                        AND attached_thread_parent_id IS NULL AND id IN ({placeholders})''', missing).fetchall())
         if self.discovery:
             from terminal_discovery import native_clients
             clients = native_clients()
             metadata = [{'id': row[0], 'cwd': row[4], 'name': row[5], 'title': row[6], 'recent': row[7] >= midnight} for row in rows]
-            metadata.extend(self.claude.metadata(clients, now))
+            metadata.extend(self.claude.metadata(clients, now, included))
             terminals.update(self.discovery.update(metadata, clients=clients))
         result = []
         seen = set()
         for ident, title, path, source, cwd, name, original_title, updated_at in rows:
             if 'subagent' in source.lower():
                 continue
-            if self.cli_only and source not in ('cli', '"cli"') and ident not in terminals:
+            if self.cli_only and source not in ('cli', '"cli"') and ident not in terminals and ident not in included:
                 continue
-            if updated_at < midnight and ident not in terminals:
+            if updated_at < midnight and ident not in terminals and ident not in included:
                 continue
             seen.add(ident)
             if ident not in self.traces or self.traces[ident].path != Path(path):
@@ -162,13 +170,18 @@ class Reader:
                 continue
             # Actual turn activity, rather than a rename or metadata update.
             terminal = terminals.get(ident)
-            if not terminal and (trace.last_activity is None or trace.last_activity.date() != now.date()):
+            if not terminal and ident not in included and (trace.last_activity is None or trace.last_activity.date() != now.date()):
                 continue
             state = 'working' if trace.active else 'sleeping'
             if terminal and not terminal.get('live'):
                 state = 'sleeping'
             chat = {'id': ident, 'title': title or 'Chat de Codex', 'state': state}
+            if ident in included:
+                chat['title'] = safe_preview(chat['title'], 100)
             if self.cli_only:
+                if ident in included and not terminal:
+                    chat['state'] = 'sleeping'
+                    terminal = {'kind': 'unbound', 'live': False}
                 chat['provider'] = 'codex'
                 chat['terminal'] = terminal
                 chat['project'] = safe_preview(str(cwd).replace('\\', '/').rstrip('/').rsplit('/', 1)[-1], 60)
@@ -243,7 +256,9 @@ def serve():
 
     updates = queue.Queue(maxsize=1)
     stop = threading.Event()
-    reader = Reader(cli_only=True, discover=True)
+    shown_history = load_json(STATE / 'shown-history.json', {})
+    hidden_ids = set(load_json(STATE / 'visibility.json', {}).get('hidden', []))
+    reader = Reader(cli_only=True, discover=True, included_loader=shown_history.copy)
     last_error = None
     native = Windows()
     bindings_path = STATE / 'window-bindings.json'
@@ -273,7 +288,16 @@ def serve():
             if avatars_hidden:
                 entry['window'].withdraw()
             else:
-                entry['window'].deiconify()
+                if entry['chat']['id'] not in hidden_ids:
+                    entry['window'].deiconify()
+
+    def toggle_one(ident):
+        details.hide()
+        if ident in hidden_ids:
+            hidden_ids.remove(ident)
+        else:
+            hidden_ids.add(ident)
+        atomic_json(STATE / 'visibility.json', {'hidden': sorted(hidden_ids)})
 
     def save_layout():
         layout.update(manual=sorted(manual_ids), order=layout_order)
@@ -290,11 +314,28 @@ def serve():
             entry['manual'] = False
             entry['docked'] = False
         save_layout()
+        position_group(force=True)
 
-    def position_group():
+    def position_group(force=False):
+        from group_menu import MENU_ID, MENU_SIZE
+        if avatars_hidden and not force:
+            return
         items = [(ident, *widgets[ident]['size']) for ident in layout_order
-            if ident in widgets and not widgets[ident]['manual'] and not widgets[ident]['docked']]
+            if ident in widgets and ident not in hidden_ids and not widgets[ident]['manual'] and not widgets[ident]['docked']]
+        if not items:
+            rectangles = [(widgets[ident]['window'].winfo_x(), widgets[ident]['window'].winfo_y(), *widgets[ident]['size'])
+                          for ident in layout_order if ident in widgets and ident not in hidden_ids]
+            if rectangles:
+                from avatar_layout import menu_after
+                x, y, width, height = rectangles[-1]
+                area = monitor_work_area((x + width // 2, y + height // 2))
+                group_menu.place(*menu_after(rectangles, area, layout['mode']))
+                return
+        items.append((MENU_ID, MENU_SIZE, MENU_SIZE))
         for ident, (x, y) in arrange(items, layout_area, layout['mode']).items():
+            if ident == MENU_ID:
+                group_menu.place(x, y)
+                continue
             window = widgets[ident]['window']
             if (window.winfo_x(), window.winfo_y()) != (x, y):
                 window.geometry(f'{x:+d}{y:+d}')
@@ -361,6 +402,32 @@ def serve():
         focus_error = None
 
     details = DetailsCard(root, widgets, open_chat, on_view=acknowledge)
+
+    def show_historical(record):
+        from session_history import history_pin
+        shown_history[record['id']] = history_pin(record)
+        atomic_json(STATE / 'shown-history.json', shown_history)
+        hidden_ids.discard(record['id'])
+        atomic_json(STATE / 'visibility.json', {'hidden': sorted(hidden_ids)})
+        if avatars_hidden:
+            toggle_visibility()
+
+    def today_only():
+        shown_history.clear()
+        atomic_json(STATE / 'shown-history.json', shown_history)
+
+    def history_loader():
+        from session_history import load_history
+        known = load_json(STATE / 'claude-sessions.json', {})
+        pins = load_json(STATE / 'shown-history.json', {})
+        roots = {record['config_dir'] for record in [*known.values(), *pins.values()] if record.get('config_dir')}
+        return load_history(CODEX, roots)
+
+    from group_menu import GroupMenu, HistoryPicker
+    history_picker = HistoryPicker(root, history_loader, show_historical, lambda: set(widgets))
+    group_menu = GroupMenu(root, details, widgets, lambda: avatars_hidden, lambda: hidden_ids,
+                           toggle_visibility, toggle_one, history_picker.show, today_only)
+    position_group()
 
     def worker():
         try:
@@ -517,6 +584,7 @@ def serve():
 
     def tick():
         nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
+        history_picker.poll()
         if tick_number % 10 == 0:
             refresh_themes()
         if (STATE / 'stop').exists():
@@ -666,7 +734,7 @@ def serve():
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
-            if avatars_hidden:
+            if avatars_hidden or ident in hidden_ids:
                 entry['window'].withdraw()
             elif entry['window'].state() == 'withdrawn':
                 entry['window'].deiconify()
@@ -693,7 +761,7 @@ def serve():
             entry['label'].configure(text='Sin conexion' if last_error else caption,
                 fg=entry['theme']['notice'] if last_error or unread else entry['theme']['foreground'])
         position_group()
-        if not avatars_hidden and tick_number % 2 == 0:
+        if not avatars_hidden and history_picker.window.state() == 'withdrawn' and tick_number % 2 == 0:
             details.reconcile_pointer()
         if tick_number % 10 == 0:
             details.refresh()
@@ -713,6 +781,9 @@ def serve():
                 'details': {'session': details.ident, 'pinned': details.pinned, 'profile': details.profile},
                 'quiet': quiet.get(),
                 'hidden': avatars_hidden,
+                'hidden_avatars': sorted(hidden_ids),
+                'group_menu': {'visible': group_menu.window.state() != 'withdrawn',
+                               'position': [group_menu.window.winfo_x(), group_menu.window.winfo_y()]},
                 'themes': themes.themes, 'theme_error': themes.error,
                 'statistics': {ident: (v['chat'].get('activity') or {}).get('stats') for ident, v in widgets.items()},
                 'theme_file': str(themes.path),
