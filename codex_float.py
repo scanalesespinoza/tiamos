@@ -232,7 +232,19 @@ def serve():
     layout_order = list(layout.get('order', []))
     layout_area = monitor_work_area()
     follow_selection = False
+    avatars_hidden = False
     hotkeys = GlobalHotkeys()
+
+    def toggle_visibility():
+        nonlocal avatars_hidden
+        avatars_hidden = not avatars_hidden
+        details.hide()
+        for entry in widgets.values():
+            entry['drag'].clear()
+            if avatars_hidden:
+                entry['window'].withdraw()
+            else:
+                entry['window'].deiconify()
 
     def save_layout():
         layout.update(manual=sorted(manual_ids), order=layout_order)
@@ -359,6 +371,7 @@ def serve():
         if not known_identity:
             atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
+        window.withdraw()
         window.title('Codex Float - ' + chat['title'])
         window.overrideredirect(True)
         window.attributes('-topmost', True)
@@ -440,6 +453,8 @@ def serve():
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
         menu.add_separator()
         menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
+        if hotkeys.labels.get('toggle_visibility'):
+            menu.add_command(label='Ocultar avatares', accelerator=hotkeys.labels['toggle_visibility'], command=toggle_visibility)
         menu.add_command(label='Apagar todos', command=quit_all)
         menu.add_command(label='Cerrar menu')
 
@@ -469,7 +484,11 @@ def serve():
             return
         while True:
             try:
-                apply_layout(hotkeys.events.get_nowait())
+                action = hotkeys.events.get_nowait()
+                if action == 'toggle_visibility':
+                    toggle_visibility()
+                else:
+                    apply_layout(action)
             except queue.Empty:
                 break
         try:
@@ -594,8 +613,9 @@ def serve():
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
-                    entry['window'].deiconify()
-            if entry['window'].state() == 'withdrawn':
+            if avatars_hidden:
+                entry['window'].withdraw()
+            elif entry['window'].state() == 'withdrawn':
                 entry['window'].deiconify()
             state = entry['state']
             now = time.monotonic()
@@ -619,7 +639,7 @@ def serve():
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error or unread else entry['accent'] if state == 'working' else '#aab8d5')
         position_group()
-        if tick_number % 2 == 0:
+        if not avatars_hidden and tick_number % 2 == 0:
             details.reconcile_pointer()
         if tick_number % 10 == 0:
             details.refresh()
@@ -638,6 +658,7 @@ def serve():
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
                 'details': {'session': details.ident, 'pinned': details.pinned},
                 'quiet': quiet.get(),
+                'hidden': avatars_hidden,
                 'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
                     'visual': v['visual'], 'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
                 'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)

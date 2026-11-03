@@ -73,8 +73,11 @@ The application registers these global shortcuts only when Windows reports the e
 | Ctrl+Alt+Up | Top center |
 | Ctrl+Alt+Right | Right center |
 | Ctrl+Alt+Left | Left center |
+| Ctrl+Alt+Down | Hide/show all avatars |
 
-Shortcuts reposition all companions on the monitor containing the mouse pointer, reset their manual placements, and keep the group centered and separated. The chosen group position persists. Group placement overrides terminal docking until the next explicit double-click, which can anchor the selected companion to its terminal again. Automatic focus changes preserve the chosen group placement.
+**Ctrl+Alt+Down** temporarily hides every avatar and the detail card; press it again to restore them. Sessions keep running, positions are retained, and newly discovered companions remain hidden until you restore the group. Placement shortcuts can still reposition the hidden group. Restarting the avatar application starts visible. When the visibility shortcut is registered, **Ocultar avatares** is also available in the context menu.
+
+Placement shortcuts reposition all companions on the monitor containing the mouse pointer, reset their manual placements, and keep the group centered and separated. The chosen group position persists. Group placement overrides terminal docking until the next explicit double-click, which can anchor the selected companion to its terminal again. Automatic focus changes preserve the chosen group placement.
 
 If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `codex-float status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
 
