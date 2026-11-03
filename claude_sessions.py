@@ -176,9 +176,13 @@ class ClaudeSessions:
                 trace = self.traces[ident] = ClaudeTrace(path, raw_id)
         return trace
 
-    def metadata(self, clients, now):
+    def metadata(self, clients, now, included=None):
+        included = included or {}
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-        self.known = {key: value for key, value in self.known.items() if value.get('last_seen', 0) >= midnight}
+        self.known = {key: value for key, value in self.known.items() if value.get('last_seen', 0) >= midnight or key in included}
+        for key, record in included.items():
+            if record.get('provider') == 'claude':
+                self.known.setdefault(key, dict(record))
         self.live = {}
         for client in clients:
             if client.get('provider') != 'claude':
@@ -201,7 +205,7 @@ class ClaudeSessions:
             trace = self.trace_for(value)
             trace.read()
             metadata.append(dict(value, name=trace.title or safe_preview(self.live.get(key, {}).get('name') or Path(value['cwd']).name, 60),
-                title='', recent=True))
+                title='', recent=value.get('last_seen', 0) >= midnight))
         return metadata
 
     def snapshot(self, terminals):
