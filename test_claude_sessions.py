@@ -170,7 +170,7 @@ class ClaudeTests(unittest.TestCase):
                 self.assertEqual(launch.call_args.kwargs['cwd'], str(Path(tmp).resolve()))
 
     def test_provider_backgrounds_are_distinct_and_fill_each_animation(self):
-        for provider, color in [('codex', '#dcecff'), ('claude', '#ffe4cc')]:
+        for provider, color in [('codex', '#b8cce3'), ('claude', '#dfc2a8')]:
             theme = provider_theme(provider)
             self.assertEqual(theme['background'], color)
             for state in ['working', 'sleeping', 'waiting']:
