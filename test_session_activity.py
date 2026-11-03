@@ -135,6 +135,17 @@ class ActivityTests(unittest.TestCase):
         self.assertGreaterEqual(x, -1920)
         self.assertGreaterEqual(y, 0)
 
+    def test_card_uses_free_side_to_keep_vertical_avatar_group_visible(self):
+        area = (0, 0, 1920, 1140)
+        anchor = (1730, 330, 178, 152)
+        neighbors = [(1730, 494, 178, 152), (1730, 658, 178, 152)]
+        x, y = card_position(anchor, (382, 562), area, obstacles=neighbors)
+        self.assertEqual(x, 1338)
+        for ax, ay, aw, ah in [anchor, *neighbors]:
+            self.assertTrue(x + 382 <= ax or x >= ax + aw or y + 562 <= ay or y >= ay + ah)
+        left_anchor = (12, 494, 178, 152)
+        self.assertEqual(card_position(left_anchor, (382, 562), area)[0], 200)
+
 
 if __name__ == '__main__':
     unittest.main()
