@@ -157,17 +157,36 @@ class DetailsCard:
         self.cancel_leave()
         self.leave_pending = self.root.after(250, self.check_leave)
 
+    def contains_pointer(self, surface):
+        x, y = self.root.winfo_pointerxy()
+        return (surface.winfo_ismapped() and
+            surface.winfo_rootx() <= x < surface.winfo_rootx() + surface.winfo_width() and
+            surface.winfo_rooty() <= y < surface.winfo_rooty() + surface.winfo_height())
+
+    def reconcile_pointer(self):
+        """Native moves/resizes do not always deliver Tk crossing events."""
+        if self.pinned:
+            return
+        if self.ident and self.contains_pointer(self.window):
+            self.cancel_leave()
+            return
+        for ident, entry in self.entries.items():
+            if self.contains_pointer(entry['window']):
+                self.request(ident)
+                return
+        if (self.ident or self.target) and self.leave_pending is None:
+            self.leave()
+
     def check_leave(self):
         self.leave_pending = None
         if self.pinned:
             return
-        x, y = self.root.winfo_pointerxy()
         surfaces = [self.window]
         owner = self.entries.get(self.ident or self.target)
         if owner:
             surfaces.append(owner['window'])
         for surface in surfaces:
-            if surface.winfo_ismapped() and surface.winfo_rootx() <= x < surface.winfo_rootx() + surface.winfo_width() and surface.winfo_rooty() <= y < surface.winfo_rooty() + surface.winfo_height():
+            if self.contains_pointer(surface):
                 return
         self.hide()
 
@@ -175,6 +194,8 @@ class DetailsCard:
         self.cancel_request()
         self.cancel_leave()
         if ident not in self.entries:
+            return
+        if not pinned and not self.contains_pointer(self.entries[ident]['window']):
             return
         self.ident, self.pinned = ident, pinned
         self.signature = None
