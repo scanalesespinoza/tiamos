@@ -57,6 +57,26 @@ codex-float theme reset
 
 The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `codex-float status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
 
+## Session levels and a compact team profile
+
+Each avatar displays its session level (`N1`, `N2`, etc.) in the existing title and a two-pixel XP progress bar. Avatar dimensions remain 178×152 / 89×76; there is no additional desktop window or animation. Hover and choose **Perfil · XP**, or right-click **Perfil · nivel y estadísticas**, to replace the activity card with a compact profile. **Actividad** switches back. Opening only the profile does not acknowledge an unread work result.
+
+The profile separates **today** (Windows local date) from **available session history**. It shows XP, actions, successful/error/unknown tool outcomes, completed and interrupted turns, today's successful validations/builds, edit actions, waits, API errors, and average completed-turn duration. The tool success percentage includes only known successful/failed non-wait tool results, with the numerator and denominator visible. Unknown outcomes stay separate. A validation count is a classified tool action, not a number of individual test cases; an edit is a tool action, not a file or line count. Duration includes waits and is not CPU time. Missing turn boundaries cannot be counted as completed work.
+
+XP is deterministic and shared by both providers:
+
+| Observed event | XP |
+| --- | --- |
+| Successful tool action | +2 |
+| Action with no explicit outcome | +1 |
+| Successful validation/build | +3 additional |
+| Explicitly completed turn | +10 |
+| Failed action, API error, waiting, or interrupted turn | No bonus |
+
+Action XP is capped at 50 per turn; completion adds up to 10 more. Actions without an observed active turn earn no XP and are excluded from this profile. Previously earned action XP is retained when a turn is interrupted. Level L starts at `50 × L × (L − 1)` total XP: level 2 at 100 XP, level 3 at 300, level 4 at 600. There are no rankings, penalties, or notifications. Volume and tool outcomes are signals for understanding activity, not certification of task quality, correctness, or business impact.
+
+Counters reuse the existing incremental transcript readers. There is no second scan, polling loop, model call, database, or new background process. Memory holds numeric lifetime aggregates plus at most eight local day buckets and bounded recent turn IDs. Restarting rebuilds the same aggregates from the available session transcript; repeated polls do not add the same events again. If logs are removed, truncated, compacted, or unavailable, levels describe the remaining readable history rather than an independent permanent score. Resuming the same session retains the level as long as its history remains available; a new session starts separately. Provider log formats and event coverage can differ, so raw totals are not a fair leaderboard between agents. `codex-float status` includes numeric `statistics`, without commands, tool output, objectives, or result prose.
+
 ## Understand each session
 
 Claude sessions already running in Windows Terminal are discovered without restarting them or installing hooks. The adapter validates the interactive session's PID and Windows process creation time against Claude's local session registry, and reads its reported state. Conversation titles, including automatic title changes, help associate the exact tab. Namespaced identities keep Codex and Claude separate even in the same workspace. Ambiguous tab matches remain unassigned rather than selecting another session. Windows Terminal title overrides or older Claude versions without the local session registry can prevent automatic binding.

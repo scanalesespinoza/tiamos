@@ -1,6 +1,7 @@
 """A single, non-activating hover card for local session understanding."""
 import time
 from session_activity import safe_preview, time_text
+from session_metrics import profile_text
 
 
 def card_position(anchor, size, area, gap=10, obstacles=(), preferred=None):
@@ -123,6 +124,7 @@ class DetailsCard:
         self.signature = None
         self.placement_context = None
         self.location = None
+        self.profile = False
         self.window = tk.Toplevel(root)
         self.window.withdraw()
         self.window.title('Codex Float · Detalles')
@@ -151,14 +153,24 @@ class DetailsCard:
             ('activity', '#c3d3e5', ('Segoe UI', 9)), ('alert', '#f0bd75', ('Segoe UI', 9)),
             ('actions', '#c3d3e5', ('Segoe UI', 9)),
             ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9)),
-            ('previous_title', '#869bb2', ('Segoe UI', 8)), ('previous_result', '#c3d3e5', ('Segoe UI', 9))]):
+            ('previous_title', '#869bb2', ('Segoe UI', 8)), ('previous_result', '#c3d3e5', ('Segoe UI', 9)),
+            ('profile_level', '#77e4c8', ('Segoe UI Semibold', 10)),
+            ('profile_today', '#e0e8f3', ('Segoe UI', 9)),
+            ('profile_quality', '#c3d3e5', ('Segoe UI', 9)),
+            ('profile_history', '#c3d3e5', ('Segoe UI', 9)),
+            ('profile_note', '#869bb2', ('Segoe UI', 8))]):
             widget = tk.Label(content, bg='#111925', fg=color, font=font, anchor='w',
                 justify='left', wraplength=350, borderwidth=0)
             self.labels[name] = widget
             widget.grid(row=row, column=0, sticky='ew', pady=(8 if name.endswith('_title') or name == 'title' else 3, 0))
-        tk.Button(self.body, text='Ir a la terminal ↗', command=self.activate, takefocus=False,
+        footer = tk.Frame(self.body, bg='#111925')
+        footer.pack(fill='x', pady=(12, 0))
+        self.profile_button = tk.Button(footer, text='Perfil · XP', command=self.toggle_profile, takefocus=False,
+            bg='#223347', fg='#d9eee8', relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5)
+        self.profile_button.pack(side='left', padx=(0, 8))
+        tk.Button(footer, text='Ir a la terminal ↗', command=self.activate, takefocus=False,
             bg='#223347', fg='#d9eee8', activebackground='#34516a', activeforeground='white',
-            relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5).pack(fill='x', pady=(12, 0))
+            relief='flat', font=('Segoe UI', 9), cursor='hand2', pady=5).pack(side='left', fill='x', expand=True)
         self.window.bind('<Enter>', lambda event: self.cancel_leave())
         self.window.bind('<Leave>', lambda event: self.leave())
         self.window.bind('<Escape>', lambda event: self.hide())
@@ -232,7 +244,7 @@ class DetailsCard:
                 return
         self.hide()
 
-    def show(self, ident, pinned=False):
+    def show(self, ident, pinned=False, profile=False):
         self.cancel_request()
         self.cancel_leave()
         if ident not in self.entries:
@@ -240,13 +252,14 @@ class DetailsCard:
         if not pinned and not self.contains_pointer(self.entries[ident]['window']):
             return
         self.ident, self.pinned = ident, pinned
+        self.profile = profile
         self.signature = None
         self.placement_context = self.location = None
         self.refresh()
         self.no_activate()
         self.window.deiconify()
         self.window.lift()
-        if self.on_view:
+        if self.on_view and not self.profile:
             self.on_view(ident)
 
     def toggle_pin(self):
@@ -254,6 +267,11 @@ class DetailsCard:
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
         if not self.pinned:
             self.leave()
+
+    def toggle_profile(self):
+        self.profile = not self.profile
+        self.signature = None
+        self.refresh()
 
     def hide(self):
         self.cancel_request()
@@ -285,6 +303,12 @@ class DetailsCard:
             objective_title='Objetivo' if fields['objective'] else '', activity_title='Actividad observada')
         if not fields['report']:
             fields['report_title'] = ''
+        if self.profile:
+            fields = {key: fields[key] for key in ('project', 'title', 'state')}
+            fields.update(profile_text((chat.get('activity') or {}).get('stats')))
+            if chat['unavailable']:
+                fields['profile_note'] = 'Sin conexión: estadísticas de la última lectura.\n' + fields['profile_note']
+        self.profile_button.configure(text='Actividad' if self.profile else 'Perfil · XP')
         signature = tuple(fields.items())
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
         self.labels['state'].configure(fg='#f0bd75' if chat['unavailable'] else '#77e4c8')
@@ -308,5 +332,5 @@ class DetailsCard:
             obstacles=obstacles, preferred=self.location if context == self.placement_context else None)
         self.placement_context, self.location = context, location
         self.window.geometry(f'382x{self.window.winfo_reqheight()}{location[0]:+d}{location[1]:+d}')
-        if self.window.winfo_ismapped() and self.on_view:
+        if not self.profile and self.window.winfo_ismapped() and self.on_view:
             self.on_view(self.ident)
