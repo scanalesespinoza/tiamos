@@ -62,6 +62,21 @@ class ActivityTests(unittest.TestCase):
         self.assertFalse(self.activity.progress)
         self.assertIsNone(self.activity.finished_at)
 
+    def test_late_items_do_not_overwrite_the_current_turn(self):
+        self.observe('task_started', turn_id='new')
+        self.observe('item_completed', turn_id='old', item={'type': 'CommandExecution',
+            'id': 'late-tool', 'command': 'python -m unittest', 'exit_code': 1})
+        self.observe('item_completed', turn_id='old', item={'type': 'AgentMessage',
+            'phase': 'final', 'content': [{'type': 'Text', 'text': 'Previous result'}]})
+        self.assertEqual(self.activity.count, 0)
+        self.assertFalse(self.activity.final)
+        self.assertEqual(self.activity.phase, 'Analizando la solicitud')
+        self.observe('item_completed', turn_id='new', item={'type': 'CommandExecution',
+            'id': 'current-tool', 'command': 'git status', 'exit_code': 0})
+        self.observe('item_completed', item={'type': 'CommandExecution',
+            'id': 'legacy-tool', 'command': 'git status', 'exit_code': 0})
+        self.assertEqual(self.activity.count, 2)
+
     def test_prose_redacts_credentials_paths_urls_and_identifiers(self):
         for prose in ['Use password=EXAMPLE', 'login -p EXAMPLE', 'Authorization: EXAMPLE', 'sk-EXAMPLEKEY']:
             self.assertNotIn('EXAMPLE', safe_preview(prose))
