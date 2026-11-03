@@ -46,6 +46,8 @@ The latest assistant progress message appears while the turn is working; the lat
 
 Move the pointer into the card to read it, choose **Fijar** to keep it open, or close it with **×**. Right-click an avatar and choose **Ver detalles de la sesión** to open it pinned. **Ir a la terminal** selects that session's exact tab. Double-click and dragging keep their existing behavior. Only one detail card opens at a time.
 
+If session updates become unavailable, the card explicitly marks its information as stale and freezes an active turn's observed duration at the last successful update. Historical actions and reported progress remain readable. Normal timing and state return automatically when reading recovers.
+
 Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Fenced code blocks and inline code are omitted from prose previews. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Tool commands, tool output, and reasoning content are never displayed in the card. `codex-float status` includes only fixed activity categories, timestamps, counters, and card state.
 
 ## Group placement and global shortcuts

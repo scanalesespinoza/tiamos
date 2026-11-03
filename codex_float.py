@@ -441,6 +441,7 @@ def serve():
                         entry['frame'] = 0
                     entry['state'] = chat['state']
                     entry['chat'] = chat
+                    entry['observed_at'] = time.time()
                     entry['chat_title'] = chat['title']
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
@@ -492,6 +493,7 @@ def serve():
             if selected in widgets and follow_selection:
                 widgets[selected]['docked'] = True
         for ident, entry in widgets.items():
+            entry['unavailable'] = bool(last_error)
             desired = avatar_size(ident, selected)
             full = desired == FULL_SIZE
             active = ident == selected
