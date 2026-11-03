@@ -9,7 +9,7 @@ HALF_SIZE = (89, 76)
 
 
 def avatar_size(ident, selected):
-    return FULL_SIZE if ident == selected else HALF_SIZE
+    return FULL_SIZE if selected is None or ident == selected else HALF_SIZE
 
 
 def dock_position(client, size=FULL_SIZE, dpi=96):
@@ -40,11 +40,11 @@ class Window:
 
 
 def foreground_selection(bindings, foreground, selected):
-    """Shared host windows retain the explicitly selected conversation."""
+    """Highlight only an eligible CLI session in the foreground window."""
     matches = [ident for ident, hwnd in bindings.items() if hwnd == foreground]
     if selected in matches:
         return selected
-    return matches[0] if len(matches) == 1 else selected
+    return matches[0] if len(matches) == 1 else None
 
 
 class Windows:

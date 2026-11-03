@@ -8,6 +8,8 @@ class FocusTests(unittest.TestCase):
         self.assertEqual(avatar_size('b', 'a'), (89, 76))
         self.assertEqual(avatar_size('a', 'b'), (89, 76))
         self.assertEqual(avatar_size('b', 'b'), (178, 152))
+        self.assertEqual(avatar_size('a', None), (178, 152))
+        self.assertEqual(avatar_size('b', None), (178, 152))
 
     def test_dock_is_inside_client_below_controls(self):
         for dpi in (96, 144, 192):
@@ -23,10 +25,11 @@ class FocusTests(unittest.TestCase):
         bindings = {'a': 123, 'b': 456}
         self.assertEqual(foreground_selection(bindings, 456, 'a'), 'b')
         self.assertEqual(foreground_selection(bindings, 123, 'b'), 'a')
-        self.assertEqual(foreground_selection(bindings, 789, 'a'), 'a')
+        self.assertIsNone(foreground_selection(bindings, 789, 'a'))
+        self.assertIsNone(foreground_selection({}, 123, 'a'))
         bindings['c'] = 123
         self.assertEqual(foreground_selection(bindings, 123, 'c'), 'c')
-        self.assertEqual(foreground_selection(bindings, 123, 'b'), 'b')
+        self.assertIsNone(foreground_selection(bindings, 123, 'b'))
 
 if __name__ == '__main__':
     unittest.main()
