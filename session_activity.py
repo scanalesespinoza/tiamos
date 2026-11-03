@@ -3,6 +3,7 @@ from collections import deque
 import json
 import re
 import unicodedata
+from session_metrics import SessionMetrics
 
 
 def text_content(content):
@@ -92,6 +93,7 @@ class Activity:
         self.last_completed_at = None
         self.last_completion_error = False
         self.last_result = ''
+        self.metrics = SessionMetrics()
 
     def add_action(self, label, stamp, outcome='info', ident=None):
         if ident and ident in self.seen:
@@ -100,6 +102,7 @@ class Activity:
             self.seen.append(ident)
         self.actions.appendleft({'label': label, 'at': stamp.timestamp(), 'outcome': outcome})
         self.count += 1
+        self.metrics.action(label, outcome, stamp)
         self.updated_at = stamp.timestamp()
 
     def observe(self, record, stamp):
@@ -109,6 +112,9 @@ class Activity:
         if kind == 'event_msg':
             turn = payload.get('turn_id') or payload.get('task_id')
             if event == 'task_started':
+                if turn and turn == self.turn_id:
+                    return
+                self.metrics.start(stamp, turn)
                 self.started_at = stamp.timestamp()
                 self.finished_at = None
                 self.turn_id = turn
@@ -121,6 +127,7 @@ class Activity:
             elif event in {'task_complete', 'task_completed', 'turn_aborted', 'task_aborted', 'task_interrupted', 'turn_cancelled', 'session_end'}:
                 if turn and self.turn_id and turn != self.turn_id:
                     return
+                self.metrics.finish(stamp, event in {'task_complete', 'task_completed'}, turn)
                 self.finished_at = stamp.timestamp()
                 self.phase = 'Turno finalizado' if event in {'task_complete', 'task_completed'} else 'Turno interrumpido'
                 if self.phase == 'Turno finalizado':
@@ -155,7 +162,9 @@ class Activity:
                             self.last_result = text
                     self.updated_at = stamp.timestamp()
                 elif item_kind in {'CommandExecution', 'FileChange', 'McpToolCall', 'ImageView', 'Extension'}:
-                    label = {'FileChange': 'Edición de archivos', 'ImageView': 'Inspección visual', 'Extension': 'Investigación'}.get(item_kind)
+                    label = {'FileChange': 'Edición de archivos', 'ImageView': 'Inspección visual'}.get(item_kind)
+                    if item_kind == 'Extension':
+                        label = category(tool=item.get('kind', ''))
                     label = label or category(item.get('command', ''), item.get('tool', ''))
                     code = item.get('exit_code')
                     result = item.get('result')
@@ -183,5 +192,5 @@ class Activity:
         return {'objective': self.objective, 'progress': self.progress, 'final': self.final,
             'phase': self.phase, 'started_at': self.started_at, 'finished_at': self.finished_at,
             'last_completed_at': self.last_completed_at, 'last_completion_error': self.last_completion_error,
-            'last_result': self.last_result,
+            'last_result': self.last_result, 'stats': self.metrics.summary(),
             'updated_at': self.updated_at, 'action_count': self.count, 'actions': list(self.actions)}

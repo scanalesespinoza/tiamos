@@ -430,6 +430,8 @@ def serve():
         entry.update(accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
         badge = tk.Label(window, text='●', fg=theme['notice'], bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
         entry['badge'] = badge
+        xp_bar = tk.Frame(window, bg=accent, height=2, borderwidth=0)
+        entry['xp_bar'] = xp_bar
         entry['chat'] = chat
         widgets[ident] = entry
         if ident not in layout_order:
@@ -456,6 +458,7 @@ def serve():
 
         menu = tk.Menu(window, tearoff=False)
         menu.add_command(label='Ver detalles de la sesión', command=lambda: details.show(ident, pinned=True))
+        menu.add_command(label='Perfil · nivel y estadísticas', command=lambda: details.show(ident, pinned=True, profile=True))
         menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
         menu.add_separator()
@@ -469,6 +472,7 @@ def serve():
             color_choice.set(COLORS.index(accent))
             accessory_choice.set(accessory)
             entry.update(accent=accent, accessory=accessory, frame=0)
+            entry['xp_bar'].configure(bg=accent)
             entry['title'].configure(fg=entry['theme']['foreground'])
             entry['animations'].clear()
             visual = entry['visual'] or visual_state(entry['chat'])
@@ -504,7 +508,7 @@ def serve():
             finally:
                 menu.grab_release()
 
-        for surface in (window, title, picture, label, badge):
+        for surface in (window, title, picture, label, badge, xp_bar):
             surface.bind('<ButtonPress-1>', press)
             surface.bind('<B1-Motion>', move)
             surface.bind('<ButtonRelease-1>', release)
@@ -630,8 +634,19 @@ def serve():
                     x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
             unread = notices.pending(ident)
-            display_title = entry['theme']['name'] + ' · ' + entry['chat_title']
+            stats = (entry['chat'].get('activity') or {}).get('stats') or {}
+            level = stats.get('level', 1)
+            display_title = f'N{level} · ' + (entry['theme']['name'] + ' · ' if full else '') + entry['chat_title']
             entry['title'].configure(text=display_title[:(22 if full else 10) if unread else (25 if full else 12)])
+            progress = stats.get('progress', 0) / stats.get('needed', 100)
+            xp_signature = (progress, desired)
+            if xp_signature != entry.get('xp_signature'):
+                entry['xp_signature'] = xp_signature
+                if progress:
+                    entry['xp_bar'].place(x=2, rely=1, y=-4, width=max(1, round((desired[0] - 4) * progress)), height=2)
+                    entry['xp_bar'].lift()
+                else:
+                    entry['xp_bar'].place_forget()
             if unread:
                 entry['badge'].configure(font=('Segoe UI', 9 if full else 7))
                 entry['badge'].place(relx=1, x=-3, y=3 if full else 0, anchor='ne')
@@ -699,10 +714,11 @@ def serve():
                 'visible': {ident: v['window'].state() != 'withdrawn' for ident, v in widgets.items()},
                 'minimized': {ident: v.get('minimized', False) for ident, v in widgets.items()},
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
-                'details': {'session': details.ident, 'pinned': details.pinned},
+                'details': {'session': details.ident, 'pinned': details.pinned, 'profile': details.profile},
                 'quiet': quiet.get(),
                 'hidden': avatars_hidden,
                 'themes': themes.themes, 'theme_error': themes.error,
+                'statistics': {ident: (v['chat'].get('activity') or {}).get('stats') for ident, v in widgets.items()},
                 'theme_file': str(themes.path),
                 'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
                     'provider': v['chat'].get('provider', 'codex'), 'background': v['theme']['background'],
