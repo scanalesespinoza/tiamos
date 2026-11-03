@@ -2,6 +2,12 @@
 
 Draggable, always-on-top Windows companions for local Codex chats with turn activity today (Windows local date). A terminal GIF types while a turn runs and sleeps after completion. Positions persist per conversation across restarts. Right-click a companion to turn all companions off.
 
+Double-click a companion to open its exact existing chat using the desktop app's `codex://threads/<id>` link. The selected companion grows to 178 by 152 pixels; all others shrink to 89 by 76 pixels. The selected companion follows the host window's upper-right client area, below the title-bar controls, including when the window moves or resizes. It hides while its host is minimized and reappears on restore. Dragging the selected companion undocks it until you select it again.
+
+For a chat hosted in a separate terminal or editor window, right-click its companion, choose **Vincular: elige una ventana en 8 s**, then focus that window. Subsequent double-clicks restore and activate that bound window. Switching focus between distinctly bound work windows exchanges the full-size companion automatically. When several chats share the same generic desktop window title, the last explicitly selected companion identifies the current chat; changing an internal tab without a distinct native title cannot be detected from window focus alone.
+
+The desktop app must be installed to open chat links ([official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links)). A manual binding is valid only while the original host window and process still exist; bind it again after restarting the host. This utility never starts another agent or submits a prompt.
+
 ```powershell
 codex-float on
 codex-float off
@@ -26,7 +32,7 @@ The installer writes `codex-float.cmd` into the user's `bin` directory, pointing
 ## Verify
 
 ```powershell
-python -m unittest discover -s . -p test_reader.py -v
+python -m unittest discover -s . -p "test_*.py" -v
 codex-float status
 ```
 

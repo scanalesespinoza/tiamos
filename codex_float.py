@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection, thread_uri
 
 BASE = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
@@ -145,10 +146,13 @@ def serve():
     root.withdraw()
     root.title('Codex Float')
     frames = {}
+    small_frames = {}
     for state in ('working', 'sleeping'):
         # Pillow composites GIF delta frames before Tk displays them.
         with Image.open(BASE / 'assets' / f'{state}.gif') as animation:
-            frames[state] = [ImageTk.PhotoImage(frame.convert('RGBA')) for frame in ImageSequence.Iterator(animation)]
+            images = [frame.convert('RGBA') for frame in ImageSequence.Iterator(animation)]
+            frames[state] = [ImageTk.PhotoImage(frame) for frame in images]
+            small_frames[state] = [ImageTk.PhotoImage(frame.resize((80, 52), Image.Resampling.LANCZOS)) for frame in images]
     positions_path = STATE / 'positions.json'
     positions = load_json(positions_path, {})
     widgets = {}
@@ -156,6 +160,57 @@ def serve():
     stop = threading.Event()
     reader = Reader()
     last_error = None
+    native = Windows()
+    bindings_path = STATE / 'window-bindings.json'
+    bindings = load_json(bindings_path, {})
+    selected = None
+    pending = None
+    bind_request = None
+    focus_error = None
+
+    def bound_window(ident):
+        binding = bindings.get(ident)
+        if binding:
+            window = native.inspect(binding['hwnd'])
+            if window and window.pid == binding['pid'] and window.executable == binding['executable']:
+                return window
+        return None
+
+    def associate(ident, window, manual=False):
+        nonlocal selected, focus_error
+        bindings[ident] = {'hwnd': window.hwnd, 'pid': window.pid, 'executable': window.executable, 'manual': manual}
+        atomic_json(bindings_path, bindings)
+        selected = ident
+        focus_error = None
+        widgets[ident]['docked'] = True
+
+    def open_chat(ident):
+        nonlocal pending, selected, focus_error
+        entry = widgets[ident]
+        entry['drag'].clear()
+        target = bound_window(ident)
+        if bindings.get(ident, {}).get('manual'):
+            if target:
+                native.activate(target)
+                associate(ident, target, manual=True)
+            else:
+                focus_error = 'Vuelve a vincular la ventana'
+            return 'break'
+        try:
+            if target:
+                native.activate(target)
+            # Navigate to the exact existing chat; never start another agent.
+            os.startfile(thread_uri(ident))
+            pending = (ident, time.monotonic() + 8)
+            focus_error = None
+        except OSError as error:
+            focus_error = f'No se pudo abrir Codex: {error}'
+        return 'break'
+
+    def bind_to_next_window(ident):
+        nonlocal bind_request, focus_error
+        bind_request = (ident, time.monotonic() + 8)
+        focus_error = None
 
     def worker():
         while not stop.is_set():
@@ -174,11 +229,13 @@ def serve():
         user32 = ctypes.windll.user32
         return tuple(user32.GetSystemMetrics(index) for index in (76, 77, 78, 79))
 
-    def clamp(x, y):
+    def clamp(x, y, size=FULL_SIZE):
         left, top, width, height = bounds()
-        return max(left, min(x, left + width - 178)), max(top, min(y, top + height - 152))
+        return max(left, min(x, left + width - size[0])), max(top, min(y, top + height - size[1]))
 
     def save_position(ident, window):
+        if ident in widgets and widgets[ident]['docked']:
+            return
         positions[ident] = [window.winfo_x(), window.winfo_y()]
         atomic_json(positions_path, positions)
 
@@ -197,28 +254,30 @@ def serve():
         window.attributes('-topmost', True)
         window.configure(bg='#171d28', highlightbackground='#46536b', highlightthickness=1)
         window.attributes('-alpha', .95)
-        width, height = 178, 152
+        width, height = HALF_SIZE
         _, _, screen_w, screen_h = bounds()
         index = len(widgets)
         location = positions.get(ident, [root.winfo_screenwidth() - 198 - (index // 5) * 190, 70 + (index % 5) * 164])
-        x, y = clamp(int(location[0]), int(location[1]))
+        x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE)
+        positions.setdefault(ident, [x, y])
         window.geometry(f'{width}x{height}{x:+d}{y:+d}')
-        title = tk.Label(window, text=chat['title'][:25], bg='#171d28', fg='#e4eaf4', font=('Segoe UI', 9), anchor='center')
-        title.pack(fill='x', pady=(5, 0))
-        picture = tk.Label(window, image=frames[chat['state']][0], bg='#171d28', borderwidth=0)
+        title = tk.Label(window, text=chat['title'][:12], bg='#171d28', fg='#e4eaf4', font=('Segoe UI', 6), anchor='center', pady=0)
+        title.pack(fill='x')
+        picture = tk.Label(window, image=small_frames[chat['state']][0], bg='#171d28', borderwidth=0)
         picture.pack()
-        label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 8))
+        label = tk.Label(window, bg='#171d28', fg='#77e4c8', font=('Segoe UI', 6), pady=0)
         label.pack()
-        entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0}
-        widgets[ident] = entry
         drag = {}
+        entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title']}
+        widgets[ident] = entry
 
         def press(event):
             drag.update(x=event.x_root - window.winfo_x(), y=event.y_root - window.winfo_y())
 
         def move(event):
             if drag:
-                x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'])
+                entry['docked'] = False
+                x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'], entry['size'])
                 window.geometry(f'{x:+d}{y:+d}')
 
         def release(event):
@@ -226,18 +285,22 @@ def serve():
             drag.clear()
 
         menu = tk.Menu(window, tearoff=False)
+        menu.add_command(label='Abrir chat y seleccionar', command=lambda: open_chat(ident))
+        menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
+        menu.add_separator()
         menu.add_command(label='Apagar todos', command=quit_all)
         menu.add_command(label='Cerrar menu')
         for surface in (window, title, picture, label):
             surface.bind('<ButtonPress-1>', press)
             surface.bind('<B1-Motion>', move)
             surface.bind('<ButtonRelease-1>', release)
+            surface.bind('<Double-Button-1>', lambda event: open_chat(ident))
             surface.bind('<Button-3>', lambda event: menu.tk_popup(event.x_root, event.y_root))
 
     tick_number = 0
 
     def tick():
-        nonlocal last_error, tick_number
+        nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
         if (STATE / 'stop').exists():
             (STATE / 'stop').unlink(missing_ok=True)
             quit_all()
@@ -251,6 +314,8 @@ def serve():
                     if ident not in wanted:
                         save_position(ident, widgets[ident]['window'])
                         widgets.pop(ident)['window'].destroy()
+                        if selected == ident:
+                            selected = None
                 for chat in chats:
                     if chat['id'] not in widgets:
                         make_widget(chat)
@@ -258,18 +323,82 @@ def serve():
                     if entry['state'] != chat['state']:
                         entry['frame'] = 0
                     entry['state'] = chat['state']
-                    entry['title'].configure(text=chat['title'][:25])
+                    entry['chat_title'] = chat['title']
                     entry['window'].title('Codex Float - ' + chat['title'])
         except queue.Empty:
             pass
-        for entry in widgets.values():
+        foreground = native.foreground()
+        active_window = native.inspect(foreground)
+        if bind_request:
+            ident, deadline = bind_request
+            if ident not in widgets or time.monotonic() > deadline:
+                bind_request = None
+                focus_error = 'Vinculacion cancelada'
+            elif active_window and active_window.visible and not active_window.minimized:
+                associate(ident, active_window, manual=True)
+                bind_request = None
+        if pending:
+            ident, deadline = pending
+            if ident not in widgets or time.monotonic() > deadline:
+                pending = None
+                focus_error = 'No se encontro la ventana de Codex'
+            elif active_window and active_window.desktop and active_window.visible and not active_window.minimized:
+                associate(ident, active_window)
+                pending = None
+        if not pending and not bind_request:
+            valid_bindings = {ident: data['hwnd'] for ident, data in bindings.items() if ident in widgets and bound_window(ident)}
+            next_selected = foreground_selection(valid_bindings, foreground, selected)
+            if next_selected != selected:
+                selected = next_selected
+                if selected in widgets:
+                    widgets[selected]['docked'] = True
+        for ident, entry in widgets.items():
+            desired = avatar_size(ident, selected)
+            full = desired == FULL_SIZE
+            if entry['size'] != desired:
+                entry['size'] = desired
+                entry['window'].geometry(f'{desired[0]}x{desired[1]}')
+                entry['title'].configure(font=('Segoe UI', 9 if full else 6))
+                entry['title'].pack_configure(pady=(5, 0) if full else 0)
+                entry['label'].configure(font=('Segoe UI', 8 if full else 6))
+                if not full:
+                    entry['docked'] = False
+                    x, y = clamp(*positions[ident], desired)
+                    entry['window'].geometry(f'{x:+d}{y:+d}')
+            entry['title'].configure(text=entry['chat_title'][:25 if full else 12])
+            entry['window'].configure(highlightbackground='#77e4c8' if full else '#46536b')
+            if full and entry['docked']:
+                host = bound_window(ident)
+                location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
+                if location:
+                    if entry['window'].state() == 'withdrawn':
+                        entry['window'].deiconify()
+                    entry['window'].geometry(f'{location[0]:+d}{location[1]:+d}')
+                else:
+                    entry['window'].withdraw()
+            elif entry['window'].state() == 'withdrawn':
+                entry['window'].deiconify()
             state = entry['state']
             if state == 'working' or tick_number % 2 == 0:
                 entry['frame'] = (entry['frame'] + 1) % len(frames[state])
-            entry['picture'].configure(image=frames[state][entry['frame']])
-            entry['label'].configure(text='Sin conexion' if last_error else 'Trabajando' if state == 'working' else 'En descanso', fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
+            entry['picture'].configure(image=(frames if full else small_frames)[state][entry['frame']])
+            caption = ('Trabajando' if full else 'Activo') if state == 'working' else ('En descanso' if full else 'Zzz')
+            if pending and pending[0] == ident:
+                caption = 'Abriendo...'
+            if bind_request and bind_request[0] == ident:
+                caption = 'Elige ventana'
+            entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
         if tick_number % 10 == 0:
-            atomic_json(STATE / 'status.json', {'running': True, 'heartbeat': time.time(), 'pid': os.getpid(), 'chats': len(widgets), 'working': sum(v['state'] == 'working' for v in widgets.values()), 'error': last_error, 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()}})
+            atomic_json(STATE / 'status.json', {
+                'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
+                'chats': len(widgets),
+                'working': sum(v['state'] == 'working' for v in widgets.values()),
+                'error': last_error, 'focus_error': focus_error, 'selected': selected,
+                'sizes': {ident: list(v['size']) for ident, v in widgets.items()},
+                'docked': {ident: v['docked'] for ident, v in widgets.items()},
+                'visible': {ident: v['window'].state() != 'withdrawn' for ident, v in widgets.items()},
+                'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
+            })
         tick_number += 1
         root.after(100, tick)
 

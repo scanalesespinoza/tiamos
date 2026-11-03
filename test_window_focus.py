@@ -1,0 +1,36 @@
+import unittest
+from window_focus import avatar_size, dock_position, foreground_selection, thread_uri
+
+
+class FocusTests(unittest.TestCase):
+    def test_selection_exchanges_full_and_half_dimensions(self):
+        self.assertEqual(avatar_size('a', 'a'), (178, 152))
+        self.assertEqual(avatar_size('b', 'a'), (89, 76))
+        self.assertEqual(avatar_size('a', 'b'), (89, 76))
+        self.assertEqual(avatar_size('b', 'b'), (178, 152))
+
+    def test_dock_is_inside_client_below_controls(self):
+        for dpi in (96, 144, 192):
+            client = (-1600, 100, -100, 1000)
+            x, y = dock_position(client, dpi=dpi)
+            self.assertGreaterEqual(x, client[0])
+            self.assertLess(x + 178, client[2])
+            self.assertGreaterEqual(y, client[1] + 48 * dpi / 96)
+            self.assertLess(y + 152, client[3])
+        self.assertIsNone(dock_position((0, 0, 100, 100)))
+
+    def test_foreground_switch_and_shared_window_ambiguity(self):
+        bindings = {'a': 123, 'b': 456}
+        self.assertEqual(foreground_selection(bindings, 456, 'a'), 'b')
+        self.assertEqual(foreground_selection(bindings, 123, 'b'), 'a')
+        self.assertEqual(foreground_selection(bindings, 789, 'a'), 'a')
+        bindings['c'] = 123
+        self.assertEqual(foreground_selection(bindings, 123, 'c'), 'c')
+        self.assertEqual(foreground_selection(bindings, 123, 'b'), 'b')
+
+    def test_uri_opens_exact_chat_without_prompt(self):
+        self.assertEqual(thread_uri('some/id?prompt=bad'), 'codex://threads/some%2Fid%3Fprompt%3Dbad')
+
+
+if __name__ == '__main__':
+    unittest.main()
