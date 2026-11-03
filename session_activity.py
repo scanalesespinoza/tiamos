@@ -20,6 +20,8 @@ def safe_preview(text, limit=180):
     text = unicodedata.normalize('NFKC', str(text))
     if re.search(r'(?i)\b(password|passwd|contrase[nñ]a|secret|token|authorization|bearer|api[_ -]?key)\b|(?:^|\s)-p\s+\S+|\b(?:sk-|gh[pousr]_|glpat-)[A-Za-z0-9_-]+|-----BEGIN', text):
         return 'Contenido sensible omitido. Consulta la terminal.'
+    text = re.sub(r'```[\s\S]*?(?:```|$)', '[código omitido]', text)
+    text = re.sub(r'`[^`\n]+`', '[código]', text)
     text = re.sub(r'https?://\S+', '[enlace]', text)
     text = re.sub(r'\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b', '[correo]', text)
     text = re.sub(r'(["\'])(?:[A-Za-z]:[\\/]|/(?:home|Users|tmp|var)/)[^"\']+\1', '[ruta]', text)
@@ -32,7 +34,7 @@ def safe_preview(text, limit=180):
 
 def is_control_request(text):
     text = text.strip()
-    return bool(re.match(r'(?i)^(?:<environment_context>|<skill>|# AGENTS\.md|These AGENTS\.md|loop\b|(?:continue|contin[uú]a|resume|sigue)(?:\s+(?:for|por|durante)\s+\d+.*)?[.!]?\s*$|(?:ok|yes|si|sí|gracias|thanks)[.!]?\s*$)', text))
+    return bool(re.match(r'(?i)^(?:<environment_context>|<skill>|# AGENTS\.md|These AGENTS\.md|\$[\w-]+\s*$|/?loop(?:\s+and\s+continue\b|\s+\d+[smhd]\b|\s*$)|(?:continue|contin[uú]a|resume|sigue)(?:\s+(?:for|por|durante)\s+\d+.*)?[.!]?\s*$|(?:ok|yes|si|sí|gracias|thanks)[.!]?\s*$)', text))
 
 
 def category(command='', tool=''):
