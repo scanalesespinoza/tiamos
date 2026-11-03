@@ -12,7 +12,8 @@ import subprocess
 import sys
 import threading
 import time
-from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection, thread_uri
+from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
+from cli_sessions import registrations, create_session, launch, thread_info
 
 BASE = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
@@ -89,24 +90,33 @@ class Trace:
 
 
 class Reader:
-    def __init__(self, codex=CODEX):
+    def __init__(self, codex=CODEX, cli_only=False, registration_loader=registrations):
         self.codex = codex
         self.traces = {}
+        self.cli_only = cli_only
+        self.registration_loader = registration_loader
 
     def snapshot(self, now=None):
         now = now or dt.datetime.now().astimezone()
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        terminals = self.registration_loader() if self.cli_only else {}
+        terminals = {ident: record for ident, record in terminals.items() if record.get('started_at', 0) >= midnight}
         db = self.codex / 'state_5.sqlite'
         if not db.exists():
             raise RuntimeError('No se encuentra la base local de chats de Codex.')
         with closing(sqlite3.connect(db.as_uri() + '?mode=ro', uri=True, timeout=2)) as connection:
-            rows = connection.execute('''SELECT id, title, rollout_path, source
-                FROM threads WHERE archived=0 AND updated_at>=?
-                AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight,)).fetchall()
+            extra = ' OR id IN (' + ','.join('?' for _ in terminals) + ')' if terminals else ''
+            columns = {row[1] for row in connection.execute('PRAGMA table_info(threads)')}
+            title = "COALESCE(NULLIF(name,''),title)" if 'name' in columns else 'title'
+            rows = connection.execute(f'''SELECT id, {title}, rollout_path, source
+                FROM threads WHERE archived=0 AND (updated_at>=?{extra})
+                AND attached_thread_parent_id IS NULL ORDER BY updated_at DESC''', (midnight, *terminals)).fetchall()
         result = []
         seen = set()
         for ident, title, path, source in rows:
             if 'subagent' in source.lower():
+                continue
+            if self.cli_only and source not in ('cli', '"cli"') and ident not in terminals:
                 continue
             seen.add(ident)
             if ident not in self.traces or self.traces[ident].path != Path(path):
@@ -117,9 +127,16 @@ class Reader:
             except FileNotFoundError:
                 continue
             # Actual turn activity, rather than a rename or metadata update.
-            if trace.last_activity is None or trace.last_activity.date() != now.date():
+            terminal = terminals.get(ident)
+            if not terminal and (trace.last_activity is None or trace.last_activity.date() != now.date()):
                 continue
-            result.append({'id': ident, 'title': title or 'Chat de Codex', 'state': 'working' if trace.active else 'sleeping'})
+            state = 'working' if trace.active else 'sleeping'
+            if terminal and not terminal.get('live'):
+                state = 'sleeping'
+            chat = {'id': ident, 'title': title or 'Chat de Codex', 'state': state}
+            if self.cli_only:
+                chat['terminal'] = terminal
+            result.append(chat)
         self.traces = {key: trace for key, trace in self.traces.items() if key in seen}
         return result
 
@@ -158,7 +175,7 @@ def serve():
     widgets = {}
     updates = queue.Queue(maxsize=1)
     stop = threading.Event()
-    reader = Reader()
+    reader = Reader(cli_only=True)
     last_error = None
     native = Windows()
     bindings_path = STATE / 'window-bindings.json'
@@ -189,22 +206,17 @@ def serve():
         entry = widgets[ident]
         entry['drag'].clear()
         target = bound_window(ident)
-        if bindings.get(ident, {}).get('manual'):
-            if target:
-                native.activate(target)
-                associate(ident, target, manual=True)
-            else:
-                focus_error = 'Vuelve a vincular la ventana'
+        terminal = entry.get('terminal') or {}
+        if target and (bindings.get(ident, {}).get('manual') or terminal.get('live')):
+            native.activate(target)
+            associate(ident, target, manual=bindings.get(ident, {}).get('manual', False))
             return 'break'
         try:
-            if target:
-                native.activate(target)
-            # Navigate to the exact existing chat; never start another agent.
-            os.startfile(thread_uri(ident))
-            pending = (ident, time.monotonic() + 8)
+            launch(ident)
+            pending = (ident, time.monotonic() + 20)
             focus_error = None
-        except OSError as error:
-            focus_error = f'No se pudo abrir Codex: {error}'
+        except (OSError, RuntimeError, ValueError) as error:
+            focus_error = str(error)
         return 'break'
 
     def bind_to_next_window(ident):
@@ -285,7 +297,7 @@ def serve():
             drag.clear()
 
         menu = tk.Menu(window, tearoff=False)
-        menu.add_command(label='Abrir chat y seleccionar', command=lambda: open_chat(ident))
+        menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
         menu.add_separator()
         menu.add_command(label='Apagar todos', command=quit_all)
@@ -324,6 +336,14 @@ def serve():
                         entry['frame'] = 0
                     entry['state'] = chat['state']
                     entry['chat_title'] = chat['title']
+                    entry['terminal'] = chat.get('terminal')
+                    terminal = chat.get('terminal') or {}
+                    host = native.inspect(terminal.get('hwnd')) if terminal.get('live') else None
+                    if host and host.pid == terminal.get('window_pid') and terminal.get('token') in host.title:
+                        binding = {'hwnd': host.hwnd, 'pid': host.pid, 'executable': host.executable, 'manual': False}
+                        if bindings.get(chat['id']) != binding:
+                            bindings[chat['id']] = binding
+                            atomic_json(bindings_path, bindings)
                     entry['window'].title('Codex Float - ' + chat['title'])
         except queue.Empty:
             pass
@@ -334,16 +354,18 @@ def serve():
             if ident not in widgets or time.monotonic() > deadline:
                 bind_request = None
                 focus_error = 'Vinculacion cancelada'
-            elif active_window and active_window.visible and not active_window.minimized:
+            elif active_window and active_window.terminal and active_window.visible and not active_window.minimized:
                 associate(ident, active_window, manual=True)
                 bind_request = None
         if pending:
             ident, deadline = pending
             if ident not in widgets or time.monotonic() > deadline:
                 pending = None
-                focus_error = 'No se encontro la ventana de Codex'
-            elif active_window and active_window.desktop and active_window.visible and not active_window.minimized:
-                associate(ident, active_window)
+                focus_error = 'No se encontro la terminal de Codex'
+            elif bound_window(ident):
+                target = bound_window(ident)
+                native.activate(target)
+                associate(ident, target)
                 pending = None
         if not pending and not bind_request:
             valid_bindings = {ident: data['hwnd'] for ident, data in bindings.items() if ident in widgets and bound_window(ident)}
@@ -374,8 +396,14 @@ def serve():
                     if entry['window'].state() == 'withdrawn':
                         entry['window'].deiconify()
                     entry['window'].geometry(f'{location[0]:+d}{location[1]:+d}')
-                else:
+                elif host:
                     entry['window'].withdraw()
+                else:
+                    # Keep a closed terminal's avatar clickable for resume.
+                    entry['docked'] = False
+                    x, y = clamp(*positions[ident], desired)
+                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    entry['window'].deiconify()
             elif entry['window'].state() == 'withdrawn':
                 entry['window'].deiconify()
             state = entry['state']
@@ -387,6 +415,8 @@ def serve():
                 caption = 'Abriendo...'
             if bind_request and bind_request[0] == ident:
                 caption = 'Elige ventana'
+            if entry.get('terminal') and not entry['terminal'].get('live'):
+                caption = 'Reabrir CLI' if full else 'CLI cerrado'
             entry['label'].configure(text='Sin conexion' if last_error else caption, fg='#e9bc79' if last_error else '#77e4c8' if state == 'working' else '#aab8d5')
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
@@ -412,11 +442,29 @@ def serve():
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Companeros flotantes de los chats de Codex activos hoy.')
-    parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve'])
+    parser = argparse.ArgumentParser(description='Terminales Codex CLI y avatares flotantes de hoy.')
+    parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list'])
+    parser.add_argument('target', nargs='?', help='Carpeta para new; UUID de sesion para resume.')
+    parser.add_argument('--all', action='store_true', help='Incluye chats de la app en list para migrarlos al CLI.')
     args = parser.parse_args()
     if args.command == 'serve':
         serve()
+        return
+    if args.command in ('new', 'resume'):
+        try:
+            ident = create_session(args.target or os.getcwd()) if args.command == 'new' else args.target
+            if not ident:
+                parser.error('resume requiere el UUID de la sesion. Consulta codex-float list --all.')
+            launch(ident)
+            print(f'Codex CLI: {ident}')
+        except (OSError, RuntimeError, ValueError) as error:
+            raise SystemExit(str(error))
+        if not running():
+            subprocess.run([sys.executable, str(BASE / 'codex_float.py'), 'on'], check=True)
+        return
+    if args.command == 'list':
+        for chat in Reader(cli_only=not args.all).snapshot():
+            print(f'{chat["id"]}  {chat["state"]:8}  {chat["title"]}')
         return
     current = running()
     command = ('off' if current else 'on') if args.command == 'toggle' else args.command

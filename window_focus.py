@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 import os
 from pathlib import PureWindowsPath
-from urllib.parse import quote
 
 
 FULL_SIZE = (178, 152)
@@ -36,8 +35,8 @@ class Window:
     dpi: int = 96
 
     @property
-    def desktop(self):
-        return PureWindowsPath(self.executable).name.lower() in {'chatgpt.exe', 'codex.exe'}
+    def terminal(self):
+        return PureWindowsPath(self.executable).name.lower() in {'windowsterminal.exe', 'openconsole.exe', 'conhost.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe'}
 
 
 def foreground_selection(bindings, foreground, selected):
@@ -46,10 +45,6 @@ def foreground_selection(bindings, foreground, selected):
     if selected in matches:
         return selected
     return matches[0] if len(matches) == 1 else selected
-
-
-def thread_uri(ident):
-    return 'codex://threads/' + quote(ident, safe='')
 
 
 class Windows:
@@ -107,7 +102,7 @@ class Windows:
                       (origin.x, origin.y, origin.x + rect.right, origin.y + rect.bottom),
                       bool(u.IsWindowVisible(hwnd)), bool(u.IsIconic(hwnd)), u.GetDpiForWindow(hwnd) or 96)
 
-    def desktop_windows(self):
+    def terminal_windows(self, token):
         result = []
 
         @self.callback_type
@@ -115,9 +110,9 @@ class Windows:
             # Avoid opening handles to unrelated processes while polling.
             title = self.C.create_unicode_buffer(256)
             self.u.GetWindowTextW(hwnd, title, len(title))
-            if any(word in title.value.lower() for word in ('chatgpt', 'codex')):
+            if f'Codex CLI [{token}]' in title.value:
                 window = self.inspect(hwnd)
-                if window and window.desktop:
+                if window and window.terminal:
                     result.append(window)
             return True
 

@@ -1,5 +1,5 @@
 import unittest
-from window_focus import avatar_size, dock_position, foreground_selection, thread_uri
+from window_focus import avatar_size, dock_position, foreground_selection
 
 
 class FocusTests(unittest.TestCase):
@@ -27,10 +27,6 @@ class FocusTests(unittest.TestCase):
         bindings['c'] = 123
         self.assertEqual(foreground_selection(bindings, 123, 'c'), 'c')
         self.assertEqual(foreground_selection(bindings, 123, 'b'), 'b')
-
-    def test_uri_opens_exact_chat_without_prompt(self):
-        self.assertEqual(thread_uri('some/id?prompt=bad'), 'codex://threads/some%2Fid%3Fprompt%3Dbad')
-
 
 if __name__ == '__main__':
     unittest.main()

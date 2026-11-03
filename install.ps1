@@ -13,6 +13,10 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Python needs Tkinter and Pillow. Install requirements.txt using this interpreter.'
 }
 New-Item -ItemType Directory -Path $launcherDirectory -Force | Out-Null
+& $PythonPath -c 'import sys;sys.path.insert(0,sys.argv[1]);from cli_sessions import cli_executable;print(cli_executable())' $PSScriptRoot
+if ($LASTEXITCODE -ne 0) {
+    throw 'Install the standalone CLI with npm install -g @openai/codex.'
+}
 $launcherPath = Join-Path $launcherDirectory 'codex-float.cmd'
 $launcher = "@echo off`r`n`"$PythonPath`" `"$appPath`" %*`r`n"
 [IO.File]::WriteAllText($launcherPath, $launcher, [Text.Encoding]::Default)
