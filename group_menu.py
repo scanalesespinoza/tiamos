@@ -20,7 +20,7 @@ class HistoryPicker:
         self.loading = False
         self.window = tk.Toplevel(root)
         self.window.withdraw()
-        self.window.title('Sesiones anteriores · Codex Float')
+        self.window.title('Sesiones anteriores · Agentlings')
         self.window.geometry('520x340')
         self.window.minsize(400, 260)
         self.window.attributes('-topmost', True)
@@ -107,7 +107,7 @@ class GroupMenu:
         self.show_history, self.today_only = show_history, today_only
         self.window = tk.Toplevel(root)
         self.window.withdraw()
-        self.window.title('Codex Float · Menú')
+        self.window.title('Agentlings · Menú')
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
         transparent = '#ff00ff' if os.name == 'nt' else '#263447'

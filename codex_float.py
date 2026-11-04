@@ -17,7 +17,7 @@ from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
 from session_activity import Activity, safe_preview
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
-from platform_runtime import VERSION, state_directory, lock_file, app_command, background_options, capabilities, open_text
+from platform_runtime import VERSION, state_directory, lock_file, app_command, background_options, capabilities, open_text, discovery_enabled
 
 BASE = Path(__file__).resolve().parent
 STATE = state_directory()
@@ -215,7 +215,7 @@ def serve():
         return
     root = tk.Tk()
     root.withdraw()
-    root.title('Codex Float')
+    root.title('Agentlings')
     identities = load_json(STATE / 'identities.json', {})
     notices = Notices(load_json(STATE / 'notices.json', {}))
     quiet = tk.BooleanVar(value=load_json(STATE / 'preferences.json', {}).get('quiet', False))
@@ -262,7 +262,7 @@ def serve():
     stop = threading.Event()
     shown_history = load_json(STATE / 'shown-history.json', {})
     hidden_ids = set(load_json(STATE / 'visibility.json', {}).get('hidden', []))
-    reader = Reader(cli_only=True, discover=os.environ.get('CODEX_FLOAT_DISABLE_DISCOVERY') != '1',
+    reader = Reader(cli_only=True, discover=discovery_enabled(),
                     included_loader=shown_history.copy)
     last_error = None
     native = Windows()
@@ -401,7 +401,7 @@ def serve():
             focus_error = str(error)
             if os.name != 'nt':
                 from tkinter import messagebox
-                messagebox.showinfo('Codex Float', focus_error, parent=root)
+                messagebox.showinfo('Agentlings', focus_error, parent=root)
         return 'break'
 
     def bind_to_next_window(ident):
@@ -487,7 +487,7 @@ def serve():
             atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
         window.withdraw()
-        window.title('Codex Float - ' + chat['title'])
+        window.title('Agentlings - ' + chat['title'])
         window.overrideredirect(True)
         window.attributes('-topmost', True)
         window.configure(bg=theme['background'], highlightbackground='#46536b', highlightthickness=1)
@@ -654,7 +654,7 @@ def serve():
                         if bindings.get(chat['id']) != binding:
                             bindings[chat['id']] = binding
                             atomic_json(bindings_path, bindings)
-                    entry['window'].title('Codex Float - ' + chat['title'])
+                    entry['window'].title('Agentlings - ' + chat['title'])
         except queue.Empty:
             pass
         foreground = native.foreground()
@@ -865,7 +865,7 @@ def theme_command(args, parser):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Terminales Codex CLI y avatares flotantes de hoy.')
+    parser = argparse.ArgumentParser(description='Agentlings: compañeros flotantes para agentes CLI.')
     parser.add_argument('--version', action='version', version=VERSION)
     parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list', 'theme', 'refresh'])
     parser.add_argument('target', nargs='?', help='Carpeta para new; UUID de sesion para resume.')
@@ -882,7 +882,7 @@ def main():
                 config = read_config(STATE / 'themes.json')
                 write_config(STATE / 'themes.json', config)
                 if not running():
-                    print('Colores validados. Se aplicaran al ejecutar codex-float on.')
+                    print('Colores validados. Se aplicaran al ejecutar agentlings on.')
                     return
                 for _ in range(50):
                     status = running() or {}
@@ -890,7 +890,7 @@ def main():
                         print('Colores recargados sin reiniciar los avatares.')
                         return
                     time.sleep(.1)
-                raise ValueError('No se pudo confirmar la recarga. Consulta codex-float status.')
+                raise ValueError('No se pudo confirmar la recarga. Consulta agentlings status.')
         except (OSError, ValueError) as error:
             raise SystemExit(str(error))
         return
@@ -901,13 +901,13 @@ def main():
         try:
             ident = create_session(args.target or os.getcwd()) if args.command == 'new' else args.target
             if not ident:
-                parser.error('resume requiere el UUID de la sesion. Consulta codex-float list --all.')
+                parser.error('resume requiere el UUID de la sesion. Consulta agentlings list --all.')
             launch(ident)
             print(f'Codex CLI: {ident}')
         except (OSError, RuntimeError, ValueError) as error:
             raise SystemExit(str(error))
         if not running():
-            subprocess.run(app_command('codex_float.py', 'on'), check=True)
+            subprocess.run(app_command('agentlings.py', 'on'), check=True)
         return
     if args.command == 'list':
         reader = Reader(cli_only=not args.all, discover=not args.all)
@@ -929,19 +929,19 @@ def main():
                     break
                 time.sleep(.1)
             if running():
-                raise SystemExit('No se pudo confirmar el apagado. Ejecuta codex-float status.')
-        print('Codex Float apagado.')
+                raise SystemExit('No se pudo confirmar el apagado. Ejecuta agentlings status.')
+        print('Agentlings apagado.')
     elif current:
-        print('Codex Float ya esta encendido.')
+        print('Agentlings ya esta encendido.')
     else:
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / 'stop').unlink(missing_ok=True)
         with (STATE / 'app.log').open('a', encoding='utf-8') as log:
-            child = subprocess.Popen(app_command('codex_float.py', 'serve', background=True), cwd=BASE,
+            child = subprocess.Popen(app_command('agentlings.py', 'serve', background=True), cwd=BASE,
                                      stdout=log, stderr=log, **background_options())
         for _ in range(60):
             if running():
-                print('Codex Float encendido. Arrastra los terminales; clic derecho para apagar.')
+                print('Agentlings encendido. Arrastra los terminales; clic derecho para apagar.')
                 return
             time.sleep(.1)
         if child.poll() is None:

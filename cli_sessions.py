@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 import uuid
-from platform_runtime import state_directory, background_options, app_command, external_environment, launch_terminal
+from platform_runtime import VERSION, state_directory, background_options, app_command, external_environment, launch_terminal
 
 BASE = Path(__file__).resolve().parent
 STATE = state_directory()
@@ -73,7 +73,7 @@ class LocalServer:
         self.reader_thread = threading.Thread(target=drain, daemon=True)
         self.reader_thread.start()
         try:
-            self.call('initialize', {'clientInfo': {'name': 'codex_float', 'version': '0.2.0'}})
+            self.call('initialize', {'clientInfo': {'name': 'agentlings', 'version': VERSION}})
             self.send({'method': 'initialized', 'params': {}})
         except Exception:
             self.__exit__(None, None, None)

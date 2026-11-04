@@ -1,4 +1,8 @@
-# Codex and Claude CLI floating avatars
+# Agentlings
+
+Your CLI agents, at a glance: floating teammates with activity, experience, and gentle notifications.
+
+Formerly **Codex Float**. The command is now `agentlings`; `codex-float` remains a compatibility alias. Existing installations reuse their original state folder and locks, keeping positions, themes, history, and sound preferences. Fresh installations use the `Agentlings` state folder (`agentlings` on Linux). The legacy `CODEX_FLOAT_*` environment settings remain accepted; `AGENTLINGS_*` takes precedence. Repository: [scanalesespinoza/agentlings](https://github.com/scanalesespinoza/agentlings).
 
 **Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux/macOS are a portable beta; exact terminal-tab focus, automatic docking, and global shortcuts remain Windows-only. The Windows-specific workflow below continues to apply to the full Windows integration.
 
@@ -15,18 +19,18 @@ python -m pip install -r requirements.txt
 .\install.ps1
 ```
 
-The installer writes `codex-float.cmd` into the user's `bin` directory. Keep that directory on PATH. The separately installed npm CLI is preferred. Model, permissions, configuration, and existing hooks are preserved. Normal Codex folder/hook trust prompts still apply; this utility installs no hooks.
+The installer writes `agentlings.cmd` into the user's `bin` directory. Keep that directory on PATH. The separately installed npm CLI is preferred. Model, permissions, configuration, and existing hooks are preserved. Normal Codex folder/hook trust prompts still apply; this utility installs no hooks.
 
 ## Daily use
 
 ```powershell
-codex-float new D:\git\my-project
-codex-float list
-codex-float resume <session-UUID>
-codex-float on
-codex-float off
-codex-float toggle
-codex-float status
+agentlings new D:\git\my-project
+agentlings list
+agentlings resume <session-UUID>
+agentlings on
+agentlings off
+agentlings toggle
+agentlings status
 ```
 
 `new` creates a persistent, named conversation through a short-lived local Codex app-server connection, then opens `codex resume <id>` in its own terminal. Creating the conversation does not submit a prompt or model turn. `resume` opens an existing conversation; if its managed terminal is already alive it activates that window instead. A per-session OS lock prevents concurrent managed CLI owners. Launching a session automatically starts the avatars when necessary. `off` stops only the avatars; terminals and agents keep running.
@@ -44,22 +48,22 @@ Opening a context menu hides the hover card and suspends automatic hover details
 
 ## Colors and live refresh
 
-Provider colors are stored in `%LOCALAPPDATA%\CodexFloat\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.
+Provider colors are stored in `%LOCALAPPDATA%\Agentlings\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.
 
 ```powershell
-codex-float theme codex --background "#24364b"
-codex-float theme claude --background "#493326"
-codex-float theme codex --foreground "#f1f5f9" --notice "#ffd18a"
-codex-float theme codex --foreground auto --notice auto
-codex-float theme edit
-codex-float refresh
-codex-float theme show
-codex-float theme reset
+agentlings theme codex --background "#24364b"
+agentlings theme claude --background "#493326"
+agentlings theme codex --foreground "#f1f5f9" --notice "#ffd18a"
+agentlings theme codex --foreground auto --notice auto
+agentlings theme edit
+agentlings refresh
+agentlings theme show
+agentlings theme reset
 ```
 
 `theme edit` opens the JSON file in Notepad. Right-click any avatar for **Editar colores globales** or **Recargar colores**. Saved changes reload automatically in about one second, including sprites at both sizes, text, and unread badges. No avatar or CLI restart is needed, and placement, selection, visibility, and personality remain intact. `refresh` validates the file and confirms the running app has applied the palette; when avatars are off, it prepares colors for the next start. `theme reset` restores dark defaults for both providers.
 
-The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `codex-float status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
+The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `agentlings status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
 
 ## Group menu and previous sessions
 
@@ -94,7 +98,7 @@ XP is deterministic and shared by both providers:
 
 Action XP is capped at 50 per turn; completion adds up to 10 more. Actions without an observed active turn earn no XP and are excluded from this profile. Previously earned action XP is retained when a turn is interrupted. Level L starts at `50 × L × (L − 1)` total XP: level 2 at 100 XP, level 3 at 300, level 4 at 600. There are no rankings, penalties, or notifications. Volume and tool outcomes are signals for understanding activity, not certification of task quality, correctness, or business impact.
 
-Counters reuse the existing incremental transcript readers. There is no second scan, polling loop, model call, database, or new background process. Memory holds numeric lifetime aggregates plus at most eight local day buckets and bounded recent turn IDs. Restarting rebuilds the same aggregates from the available session transcript; repeated polls do not add the same events again. If logs are removed, truncated, compacted, or unavailable, levels describe the remaining readable history rather than an independent permanent score. Resuming the same session retains the level as long as its history remains available; a new session starts separately. Provider log formats and event coverage can differ, so raw totals are not a fair leaderboard between agents. `codex-float status` includes numeric `statistics`, without commands, tool output, objectives, or result prose.
+Counters reuse the existing incremental transcript readers. There is no second scan, polling loop, model call, database, or new background process. Memory holds numeric lifetime aggregates plus at most eight local day buckets and bounded recent turn IDs. Restarting rebuilds the same aggregates from the available session transcript; repeated polls do not add the same events again. If logs are removed, truncated, compacted, or unavailable, levels describe the remaining readable history rather than an independent permanent score. Resuming the same session retains the level as long as its history remains available; a new session starts separately. Provider log formats and event coverage can differ, so raw totals are not a fair leaderboard between agents. `agentlings status` includes numeric `statistics`, without commands, tool output, objectives, or result prose.
 
 ## Understand each session
 
@@ -122,7 +126,7 @@ Four brief, soft synthesized chimes distinguish a newly completed turn, an obser
 
 Startup, first discovery of a session, and historical records are silent. Only subsequent fresh events notify. Simultaneous events produce one chime, prioritizing intervention, error, level, then completion. Automatic playback is limited to one chime per three seconds, with repeated errors limited to one per session per twenty seconds. Suppressed events are not queued or replayed after unmuting. **Modo tranquilo** also disables the preview until it is turned off.
 
-Playback uses Windows asynchronous audio and short local WAV files generated on demand (at most four files, under 120 KB total). It adds no audio dependency, worker process, or polling timer. `codex-float status` exposes the sound preference, volume, quiet suppression, and any playback error; an unavailable audio device does not stop the avatars.
+Playback uses Windows asynchronous audio and short local WAV files generated on demand (at most four files, under 120 KB total). It adds no audio dependency, worker process, or polling timer. `agentlings status` exposes the sound preference, volume, quiet suppression, and any playback error; an unavailable audio device does not stop the avatars.
 
 Hover over an avatar for a compact detail card without moving keyboard focus away from the terminal. The card shows the project, current objective, working/resting state, turn duration, latest observed activity, and up to three recent tool outcomes. The floating caption summarizes the current observed phase, such as editing, validation, or investigation.
 
@@ -134,7 +138,7 @@ Move the pointer into the card to read it, choose **Fijar** to keep it open, or 
 
 If session updates become unavailable, the card explicitly marks its information as stale and freezes an active turn's observed duration at the last successful update. Historical actions and reported progress remain readable. Normal timing and state return automatically when reading recovers.
 
-Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Fenced code blocks and inline code are omitted from prose previews. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Tool commands, tool output, and reasoning content are never displayed in the card. `codex-float status` includes only fixed activity categories, timestamps, counters, and card state.
+Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Fenced code blocks and inline code are omitted from prose previews. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Tool commands, tool output, and reasoning content are never displayed in the card. `agentlings status` includes only fixed activity categories, timestamps, counters, and card state.
 
 ## Group placement and global shortcuts
 
@@ -153,7 +157,7 @@ The application registers these global shortcuts only when Windows reports the e
 
 Placement shortcuts reposition all companions on the monitor containing the mouse pointer, reset their manual placements, and keep the group centered and separated. The chosen group position persists. Group placement overrides terminal docking until the next explicit double-click, which can anchor the selected companion to its terminal again. Automatic focus changes preserve the chosen group placement.
 
-If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `codex-float status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
+If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `agentlings status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
 
 Plain `codex` clients are matched using their live process workspaces and terminal footer metadata. The initial scan inspects inactive tabs once after at least two seconds without user input, then restores the originally selected tab. Later polls inspect the selected tab and reuse validated tab associations. The helper returns only workspace/title metadata and tab identifiers, without saving terminal transcripts or input. Ambiguous matches are left unassigned; the manual binding option remains available for other console hosts. Active unmanaged turns cannot be resumed into a second CLI.
 
@@ -162,8 +166,8 @@ Starting another CLI client or persisting/renaming a conversation automatically 
 ## Continue chats from the desktop app
 
 ```powershell
-codex-float list --all
-codex-float resume <session-UUID>
+agentlings list --all
+agentlings resume <session-UUID>
 ```
 
 Wait for the original turn to finish before moving the conversation to the CLI. Desktop chats are hidden until a live CLI client or launcher registration identifies them. The utility does not close the desktop app or stop its work. WSL sessions in a separate Linux home are not included.
@@ -172,7 +176,7 @@ Wait for the original turn to finish before moving the conversation to the CLI. 
 
 The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle and activity events every two seconds. It excludes archived threads and subagents. Only bounded, sanitized objective/progress excerpts are retained in memory for the detail card; command output and reasoning content are not retained. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
 
-Runtime state lives in `%LOCALAPPDATA%/CodexFloat`: positions, window bindings, CLI registrations, per-session locks, heartbeat, startup errors, identity slots, result/acknowledgment timestamps, and the quiet preference. Companion notices store no result text. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
+Runtime state lives in `%LOCALAPPDATA%/Agentlings`: positions, window bindings, CLI registrations, per-session locks, heartbeat, startup errors, identity slots, result/acknowledgment timestamps, and the quiet preference. Companion notices store no result text. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
 
 Before relocating, stop avatars and finish managed CLI sessions, move the repository, then rerun `install.ps1`. No login startup is installed. To uninstall, stop avatars and managed sessions, then remove the launcher and checkout.
 

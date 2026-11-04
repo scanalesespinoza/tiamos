@@ -7,11 +7,33 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from platform_runtime import app_command, capabilities, external_environment, launch_terminal, lock_file, state_directory
+from platform_runtime import app_command, capabilities, discovery_enabled, external_environment, launch_terminal, lock_file, state_directory
 from portable_discovery import PortableDiscovery, PortableClaudeSessions, match_client
 
 
 class PlatformTests(unittest.TestCase):
+    def test_rebrand_reuses_existing_state_even_if_both_directories_exist(self):
+        with tempfile.TemporaryDirectory() as folder, patch('platform_runtime.Path.home', return_value=Path(folder)), \
+             patch.dict(os.environ, {'LOCALAPPDATA': folder, 'XDG_STATE_HOME': folder}, clear=True):
+            current = state_directory()
+            self.assertIn(current.name, ('Agentlings', 'agentlings'))
+            legacy = current.with_name('CodexFloat' if current.name == 'Agentlings' else 'codex-float')
+            legacy.mkdir(parents=True)
+            preference = legacy / 'sounds.json'
+            preference.write_text('{"enabled":false,"volume":10}')
+            current.mkdir()
+            self.assertEqual(state_directory(), legacy)
+            self.assertEqual(json.loads((state_directory()/'sounds.json').read_text())['volume'], 10)
+
+    def test_agentlings_environment_overrides_legacy_names(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
+            'CODEX_FLOAT_STATE_DIR':str(Path(folder)/'legacy'), 'AGENTLINGS_STATE_DIR':str(Path(folder)/'current'),
+            'CODEX_FLOAT_DISABLE_DISCOVERY':'1', 'AGENTLINGS_DISABLE_DISCOVERY':'0'}):
+            self.assertEqual(state_directory(), (Path(folder)/'current').resolve())
+            self.assertTrue(discovery_enabled())
+            os.environ.pop('AGENTLINGS_DISABLE_DISCOVERY')
+            self.assertFalse(discovery_enabled())
+
     def test_state_override_and_lock_exclude_duplicate_owner(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_FLOAT_STATE_DIR': folder}):
             self.assertEqual(state_directory(), Path(folder).resolve())
