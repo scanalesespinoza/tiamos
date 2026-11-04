@@ -1,7 +1,7 @@
 """Stable companion identities, bounded notices, and code-native expressive sprites."""
 import hashlib
 import math
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageColor
 from avatar_theme import palettes
 
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
@@ -101,6 +101,10 @@ class Notices:
 
 def render_frames(state, accent, accessory=0, background='#171d28'):
     frames = []
+    if accessory not in (0, 1, 2):
+        rgb = ImageColor.getrgb(accent)
+        cap_shadow = tuple(round(channel * .62) for channel in rgb)
+        cap_light = tuple(round(channel + (255 - channel) * .3) for channel in rgb)
     for step in range(8):
         image = Image.new('RGB', (160, 104), background)
         draw = ImageDraw.Draw(image)
@@ -119,8 +123,20 @@ def render_frames(state, accent, accessory=0, background='#171d28'):
             draw.polygon([(49, top), (55, top - 10), (67, top)], fill=accent)
             draw.polygon([(93, top), (105, top - 10), (111, top)], fill=accent)
         else:
-            draw.rounded_rectangle((56, top - 7, 106, top + 2), radius=4, fill=accent)
-            draw.line((51, top + 2, 117, top + 2), fill=accent, width=3)
+            # A rounded crown and a forward visor stay distinct at half size.
+            # The top button fits even at the celebration's highest bounce.
+            draw.ellipse((76, top - 14, 82, top - 10), fill=cap_shadow, outline='#152033')
+            draw.pieslice((49, top - 12, 110, top + 15), 180, 360,
+                          fill=cap_shadow, outline='#152033', width=1)
+            draw.polygon([(50, top + 2), (52, top - 4), (59, top - 9),
+                          (69, top - 11), (81, top - 11), (86, top + 2)], fill=accent)
+            draw.line([(81, top - 10), (85, top - 5), (87, top + 1)], fill=cap_light, width=1)
+            draw.ellipse((65, top - 6, 73, top + 1), fill='#243447', outline=cap_light)
+            draw.polygon([(49, top + 2), (103, top + 2), (118, top + 6),
+                          (124, top + 10), (114, top + 12), (89, top + 9),
+                          (68, top + 7), (49, top + 7)], fill=cap_shadow, outline='#152033')
+            draw.line([(52, top + 3), (101, top + 3), (116, top + 7),
+                       (120, top + 9)], fill=accent, width=2)
         for x in (59, 96):
             if state == 'sleeping':
                 draw.arc((x - 2, top + 17, x + 10, top + 28), 0, 180, fill=accent, width=2)
