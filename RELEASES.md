@@ -2,12 +2,17 @@
 
 Download from [Agentlings releases](https://github.com/scanalesespinoza/agentlings/releases).
 
-The Agentlings release is **0.3.0-beta.5** (formerly Codex Float). Download an archive and its
+The Agentlings release is **0.3.0-beta.6** (formerly Codex Float). Download an archive and its
 `.sha256` file from the repository's GitHub Releases page. Extract the entire
 archive; the executable needs its sibling `_internal` directory. Python is bundled.
 Codex CLI and Claude CLI are separate installations and must be available on PATH.
 
-## Changes in beta.5
+## Changes in beta.6
+
+- The cap accessory has a rounded crown, an asymmetric visor, a small badge, and shading matched to the companion's accent. The silhouette stays recognizable at full and half size; existing cap selections update automatically.
+- Antennas have a defined mount and a shaded round tip; headphones have an arched padded band and distinct ear cushions; ears have a larger pointed silhouette and contrasting inner panels. All accessories follow the existing accent palette and keep the same sprite dimensions and animation timing.
+
+## Previous changes in beta.5
 
 - Starred markers stay out of the Windows taskbar and do not take keyboard focus. Tool-window settings survive transparency changes, switching shapes/themes, and hiding/restoring markers.
 
@@ -91,7 +96,7 @@ menu, statistics and singleton behavior, then shuts it down. Checksums accompany
 each artifact. This does not certify real speaker output or every desktop environment.
 
 Pull requests build all four architectures as downloadable workflow artifacts.
-After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.5`).
+After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.6`).
 The release workflow builds and checks all targets before publishing a single GitHub
 prerelease containing all archives and hashes. Version/tag mismatch fails publishing.
 Signing/notarization requires separate release credentials and remains future work.

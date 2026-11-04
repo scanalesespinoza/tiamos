@@ -1,7 +1,7 @@
 """Stable companion identities, bounded notices, and code-native expressive sprites."""
 import hashlib
 import math
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageColor
 from avatar_theme import palettes
 
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
@@ -101,6 +101,9 @@ class Notices:
 
 def render_frames(state, accent, accessory=0, background='#171d28'):
     frames = []
+    rgb = ImageColor.getrgb(accent)
+    accessory_shadow = tuple(round(channel * .62) for channel in rgb)
+    accessory_light = tuple(round(channel + (255 - channel) * .3) for channel in rgb)
     for step in range(8):
         image = Image.new('RGB', (160, 104), background)
         draw = ImageDraw.Draw(image)
@@ -109,18 +112,47 @@ def render_frames(state, accent, accessory=0, background='#171d28'):
         draw.rounded_rectangle((29, top, 131, top + 62), radius=12, fill='#2a3447', outline=accent, width=2)
         draw.rounded_rectangle((37, top + 8, 123, top + 49), radius=7, fill='#0d1420')
         if accessory == 0:
-            draw.line((80, top, 80, top - 8), fill=accent, width=2)
-            draw.ellipse((77, top - 13, 83, top - 7), fill=accent)
+            draw.rounded_rectangle((72, top - 1, 88, top + 4), radius=3,
+                                   fill=accessory_shadow, outline='#152033')
+            draw.line((80, top + 1, 80, top - 6), fill='#152033', width=5)
+            draw.line((80, top, 80, top - 6), fill=accent, width=3)
+            draw.ellipse((74, top - 14, 86, top - 3), fill=accessory_shadow, outline='#152033')
+            draw.ellipse((75, top - 13, 84, top - 5), fill=accent)
+            draw.ellipse((77, top - 12, 80, top - 10), fill=accessory_light)
         elif accessory == 1:
-            draw.arc((23, top - 4, 137, top + 60), 180, 360, fill=accent, width=3)
-            draw.rounded_rectangle((22, top + 21, 29, top + 39), radius=3, fill=accent)
-            draw.rounded_rectangle((131, top + 21, 138, top + 39), radius=3, fill=accent)
+            draw.arc((19, top - 12, 141, top + 70), 180, 360, fill='#152033', width=9)
+            draw.arc((21, top - 10, 139, top + 68), 180, 360, fill=accessory_shadow, width=5)
+            draw.arc((23, top - 9, 137, top + 65), 205, 335, fill=accent, width=3)
+            for left in (15, 129):
+                draw.rounded_rectangle((left, top + 19, left + 16, top + 45), radius=5,
+                                       fill=accessory_shadow, outline=accent, width=2)
+            draw.rounded_rectangle((26, top + 23, 33, top + 42), radius=3, fill='#111925', outline='#46536b')
+            draw.rounded_rectangle((127, top + 23, 134, top + 42), radius=3, fill='#111925', outline='#46536b')
+            draw.line((19, top + 25, 19, top + 37), fill=accessory_light, width=2)
+            draw.line((141, top + 25, 141, top + 37), fill=accessory_light, width=2)
         elif accessory == 2:
-            draw.polygon([(49, top), (55, top - 10), (67, top)], fill=accent)
-            draw.polygon([(93, top), (105, top - 10), (111, top)], fill=accent)
+            for mirrored in (False, True):
+                def ear_points(points):
+                    return [(160 - x if mirrored else x, top + y) for x, y in points]
+                draw.polygon(ear_points([(42, 4), (46, -13), (68, 4)]),
+                             fill=accessory_shadow, outline='#152033')
+                draw.line(ear_points([(43, 3), (47, -11), (65, 3)]), fill=accent, width=2)
+                draw.polygon(ear_points([(49, -6), (48, 1), (59, 1)]), fill=accessory_light)
         else:
-            draw.rounded_rectangle((56, top - 7, 106, top + 2), radius=4, fill=accent)
-            draw.line((51, top + 2, 117, top + 2), fill=accent, width=3)
+            # A rounded crown and a forward visor stay distinct at half size.
+            # The top button fits even at the celebration's highest bounce.
+            draw.ellipse((76, top - 14, 82, top - 10), fill=accessory_shadow, outline='#152033')
+            draw.pieslice((49, top - 12, 110, top + 15), 180, 360,
+                          fill=accessory_shadow, outline='#152033', width=1)
+            draw.polygon([(50, top + 2), (52, top - 4), (59, top - 9),
+                          (69, top - 11), (81, top - 11), (86, top + 2)], fill=accent)
+            draw.line([(81, top - 10), (85, top - 5), (87, top + 1)], fill=accessory_light, width=1)
+            draw.ellipse((65, top - 6, 73, top + 1), fill='#243447', outline=accessory_light)
+            draw.polygon([(49, top + 2), (103, top + 2), (118, top + 6),
+                          (124, top + 10), (114, top + 12), (89, top + 9),
+                          (68, top + 7), (49, top + 7)], fill=accessory_shadow, outline='#152033')
+            draw.line([(52, top + 3), (101, top + 3), (116, top + 7),
+                       (120, top + 9)], fill=accent, width=2)
         for x in (59, 96):
             if state == 'sleeping':
                 draw.arc((x - 2, top + 17, x + 10, top + 28), 0, 180, fill=accent, width=2)
