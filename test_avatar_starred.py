@@ -85,8 +85,16 @@ class StarredWidgetTests(unittest.TestCase):
         user.GetWindowLongW.argtypes = [W.HWND, C.c_int]
         user.GetWindowLongW.restype = C.c_long
         user.GetForegroundWindow.restype = W.HWND
+        # Use a stable, owned foreground window. The previous test's window may
+        # still be retiring, so an arbitrary desktop foreground is not a baseline.
+        self.root.geometry('260x80+300+300')
+        self.root.deiconify()
+        self.root.update()
+        self.root.focus_force()
+        self.root.update()
         marker = StarredMarker(self.root, Mock(), Mock())
         foreground = user.GetForegroundWindow()
+        self.assertEqual(foreground, user.GetAncestor(self.root.winfo_id(), 2))
         for symbol, background, visible in [('star','#24364b',True), ('diamond','#493326',True),
                                             ('diamond','#493326',False), ('diamond','#493326',True)]:
             marker.sync((300,200,178,152),'right',symbol,visible=visible,background=background)
