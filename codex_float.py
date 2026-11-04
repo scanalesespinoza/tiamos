@@ -200,6 +200,7 @@ class Reader:
 
 
 def serve():
+    from avatar_starred import StarredMarker, StarredMenu, preferences, footprint, avatar_origin, occupied_rect
     import tkinter as tk
     from session_details import DetailsCard, compact_caption
     from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
@@ -262,6 +263,10 @@ def serve():
     stop = threading.Event()
     shown_history = load_json(STATE / 'shown-history.json', {})
     hidden_ids = set(load_json(STATE / 'visibility.json', {}).get('hidden', []))
+    starred = preferences(load_json(STATE / 'starred.json', {}))
+
+    def is_starred(ident):
+        return starred.get(ident, {}).get('enabled', False)
     reader = Reader(cli_only=True, discover=discovery_enabled(),
                     included_loader=shown_history.copy)
     last_error = None
@@ -292,6 +297,7 @@ def serve():
             entry['drag'].clear()
             if avatars_hidden:
                 entry['window'].withdraw()
+                entry['starred_marker'].hide()
             else:
                 if entry['chat']['id'] not in hidden_ids:
                     entry['window'].deiconify()
@@ -336,10 +342,11 @@ def serve():
         from group_menu import MENU_ID, MENU_SIZE
         if avatars_hidden and not force:
             return
-        items = [(ident, *widgets[ident]['size']) for ident in layout_order
+        items = [(ident, *footprint(widgets[ident]['size'], layout['mode'], is_starred(ident))) for ident in layout_order
             if ident in widgets and ident not in hidden_ids and not widgets[ident]['manual'] and not widgets[ident]['docked']]
         if not items:
-            rectangles = [(widgets[ident]['window'].winfo_x(), widgets[ident]['window'].winfo_y(), *widgets[ident]['size'])
+            rectangles = [occupied_rect((widgets[ident]['window'].winfo_x(), widgets[ident]['window'].winfo_y(), *widgets[ident]['size']),
+                                        layout['mode'], is_starred(ident))
                           for ident in layout_order if ident in widgets and ident not in hidden_ids]
             if rectangles:
                 from avatar_layout import menu_after
@@ -353,9 +360,19 @@ def serve():
                 group_menu.place(x, y)
                 continue
             window = widgets[ident]['window']
+            x, y = avatar_origin(x, y, widgets[ident]['size'], layout['mode'], is_starred(ident))
             if (window.winfo_x(), window.winfo_y()) != (x, y):
                 window.geometry(f'{x:+d}{y:+d}')
             positions[ident] = [x, y]
+
+    def sync_markers():
+        for ident, entry in widgets.items():
+            window = entry['window']
+            entry['starred_marker'].sync(
+                (window.winfo_x(), window.winfo_y(), *entry['size']), layout['mode'],
+                starred.get(ident, {}).get('symbol', 'star') if is_starred(ident) else None,
+                visible=not avatars_hidden and ident not in hidden_ids,
+                background=entry['theme']['background'])
 
     def bound_window(ident):
         binding = bindings.get(ident)
@@ -473,9 +490,11 @@ def serve():
         user32 = ctypes.windll.user32
         return tuple(user32.GetSystemMetrics(index) for index in (76, 77, 78, 79))
 
-    def clamp(x, y, size=FULL_SIZE):
+    def clamp(x, y, size=FULL_SIZE, ident=None):
         left, top, width, height = bounds()
-        return max(left, min(x, left + width - size[0])), max(top, min(y, top + height - size[1]))
+        x, y, outer_width, outer_height = occupied_rect((x, y, *size), layout['mode'], is_starred(ident))
+        x, y = max(left, min(x, left + width - outer_width)), max(top, min(y, top + height - outer_height))
+        return avatar_origin(x, y, size, layout['mode'], is_starred(ident))
 
     def save_position(ident, window):
         if ident in widgets and widgets[ident]['docked']:
@@ -507,7 +526,7 @@ def serve():
         window.attributes('-alpha', 1)
         width, height = HALF_SIZE
         location = positions.get(ident, [layout_area[0] + 12, layout_area[1] + 12])
-        x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE)
+        x, y = clamp(int(location[0]), int(location[1]), HALF_SIZE, ident)
         positions.setdefault(ident, [x, y])
         window.geometry(f'{width}x{height}{x:+d}{y:+d}')
         title = tk.Label(window, text=chat['title'][:12], bg=theme['background'], fg=theme['foreground'], font=('Segoe UI', 6), anchor='center', pady=0, padx=0, borderwidth=0)
@@ -540,7 +559,7 @@ def serve():
                 entry['docked'] = False
                 entry['manual'] = True
                 manual_ids.add(ident)
-                x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'], entry['size'])
+                x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'], entry['size'], ident)
                 window.geometry(f'{x:+d}{y:+d}')
 
         def release(event):
@@ -556,6 +575,17 @@ def serve():
         menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident),
                          state='normal' if os.name == 'nt' else 'disabled')
         menu.add_separator()
+        def change_starred(record):
+            starred[ident] = record
+            atomic_json(STATE / 'starred.json', starred)
+            x, y = clamp(window.winfo_x(), window.winfo_y(), entry['size'], ident)
+            window.geometry(f'{x:+d}{y:+d}')
+            position_group()
+            sync_markers()
+
+        starred_menu = StarredMenu(menu, starred.get(ident, {}), change_starred)
+        menu.add_cascade(label='Starred', menu=starred_menu.menu)
+        entry['starred_menu'] = starred_menu
         appearance_menu = tk.Menu(menu, tearoff=False)
         color_choice = tk.IntVar(value=COLORS.index(accent))
         accessory_choice = tk.IntVar(value=accessory)
@@ -601,6 +631,8 @@ def serve():
             sound_menu.refresh()
             return details.popup_menu(menu, event.x_root, event.y_root)
 
+        entry['starred_marker'] = StarredMarker(root, show_menu, lambda: open_chat(ident))
+
         for surface in (window, title, picture, label, badge, xp_bar):
             surface.bind('<ButtonPress-1>', press)
             surface.bind('<B1-Motion>', move)
@@ -644,7 +676,9 @@ def serve():
                 for ident in list(widgets):
                     if ident not in wanted:
                         save_position(ident, widgets[ident]['window'])
-                        widgets.pop(ident)['window'].destroy()
+                        removed = widgets.pop(ident)
+                        removed['starred_marker'].destroy()
+                        removed['window'].destroy()
                         if selected == ident:
                             selected = None
                 for chat in chats:
@@ -725,10 +759,10 @@ def serve():
                 entry['label'].configure(font=('Segoe UI', 8 if full else 6))
                 if not full:
                     entry['docked'] = False
-                    x, y = clamp(*positions[ident], desired)
+                    x, y = clamp(*positions[ident], desired, ident)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
                 elif not active:
-                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
+                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired, ident)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
             unread = notices.pending(ident)
             stats = (entry['chat'].get('activity') or {}).get('stats') or {}
@@ -756,16 +790,17 @@ def serve():
             if active and entry['docked']:
                 location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
                 if location:
-                    entry['window'].geometry(f'{location[0]:+d}{location[1]:+d}')
+                    x, y = clamp(*location, desired, ident)
+                    entry['window'].geometry(f'{x:+d}{y:+d}')
                 elif host:
                     # Minimized client coordinates are off-screen. Keep the last
                     # visible position while retaining docking for restoration.
-                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired)
+                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired, ident)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
                 else:
                     # Keep a closed terminal's avatar clickable for resume.
                     entry['docked'] = False
-                    x, y = clamp(*positions[ident], desired)
+                    x, y = clamp(*positions[ident], desired, ident)
                     entry['window'].geometry(f'{x:+d}{y:+d}')
             if avatars_hidden or ident in hidden_ids:
                 entry['window'].withdraw()
@@ -794,6 +829,7 @@ def serve():
             entry['label'].configure(text='Sin conexion' if last_error else caption,
                 fg=entry['theme']['notice'] if last_error or unread else entry['theme']['foreground'])
         position_group()
+        sync_markers()
         if not avatars_hidden and history_picker.window.state() == 'withdrawn' and tick_number % 2 == 0:
             details.reconcile_pointer()
         if tick_number % 10 == 0:
@@ -818,6 +854,8 @@ def serve():
                 'sounds': dict(sounds.status(), paused_by_quiet=quiet.get()),
                 'hidden': avatars_hidden,
                 'hidden_avatars': sorted(hidden_ids),
+                'starred': {ident: dict(starred[ident], **v['starred_marker'].status())
+                            for ident, v in widgets.items() if ident in starred},
                 'group_menu': {'visible': group_menu.window.state() != 'withdrawn',
                                'position': [group_menu.window.winfo_x(), group_menu.window.winfo_y()],
                                'team': group_menu.summary},
