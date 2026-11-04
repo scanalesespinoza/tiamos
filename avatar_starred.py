@@ -116,22 +116,22 @@ class StarredMarker:
             return
         if self.window is None:
             import tkinter as tk
-            from session_details import DetailsCard
             # Independent of the terminal/companion window's minimize state.
             self.window = tk.Toplevel(self.root)
             self.window.withdraw()
             self.window.title('Agentlings · Starred')
             self.window.overrideredirect(True)
+            if os.name == 'nt':
+                self.window.attributes('-toolwindow', True)
             self.window.attributes('-topmost', True)
             self.canvas = tk.Canvas(self.window, highlightthickness=0, borderwidth=0, cursor='hand2')
             self.canvas.pack(fill='both', expand=True)
             self.canvas.bind('<Button-3>', self.on_menu)
             self.canvas.bind('<Double-Button-1>', lambda _: self.on_open())
-            self.window.update_idletasks()
-            DetailsCard.no_activate(self)
         x, y, size, _ = marker_rect(rect, anchor)
         signature = symbol, size, background
-        if signature != self.signature:
+        appearance_changed = signature != self.signature
+        if appearance_changed:
             color = '#ff00ff' if os.name == 'nt' else background
             self.window.configure(bg=color)
             self.canvas.configure(bg=color, width=size, height=size)
@@ -143,5 +143,11 @@ class StarredMarker:
         if geometry != self.geometry:
             self.window.geometry(geometry)
             self.geometry = geometry
+        if appearance_changed or self.window.state() == 'withdrawn':
+            # Tk can rebuild the native wrapper when transparency changes.
+            # Apply non-activation after those attributes, before showing it.
+            from session_details import DetailsCard
+            self.window.update_idletasks()
+            DetailsCard.no_activate(self)
         if self.window.state() == 'withdrawn':
             self.window.deiconify()

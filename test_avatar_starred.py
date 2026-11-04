@@ -75,6 +75,29 @@ class StarredWidgetTests(unittest.TestCase):
     def tearDown(self):
         self.root.destroy()
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows taskbar styles')
+    def test_marker_keeps_toolwindow_and_noactivate_styles_after_native_updates(self):
+        import ctypes as C
+        from ctypes import wintypes as W
+        user = C.windll.user32
+        user.GetAncestor.argtypes = [W.HWND, W.UINT]
+        user.GetAncestor.restype = W.HWND
+        user.GetWindowLongW.argtypes = [W.HWND, C.c_int]
+        user.GetWindowLongW.restype = C.c_long
+        user.GetForegroundWindow.restype = W.HWND
+        marker = StarredMarker(self.root, Mock(), Mock())
+        foreground = user.GetForegroundWindow()
+        for symbol, background, visible in [('star','#24364b',True), ('diamond','#493326',True),
+                                            ('diamond','#493326',False), ('diamond','#493326',True)]:
+            marker.sync((300,200,178,152),'right',symbol,visible=visible,background=background)
+            self.root.update()
+            hwnd = user.GetAncestor(marker.window.winfo_id(), 2)
+            style = user.GetWindowLongW(hwnd, -20)
+            self.assertTrue(style & 0x80, 'WS_EX_TOOLWINDOW must exclude the marker from the taskbar')
+            self.assertFalse(style & 0x40000, 'WS_EX_APPWINDOW must not force a taskbar button')
+            self.assertTrue(style & 0x08000000, 'WS_EX_NOACTIVATE must survive Tk attribute changes')
+            self.assertEqual(user.GetForegroundWindow(), foreground, 'Showing a marker must not take focus')
+
     def test_menu_default_select_disable_and_reload_keep_symbol(self):
         from codex_float import atomic_json
         with tempfile.TemporaryDirectory() as folder:

@@ -2,12 +2,16 @@
 
 Download from [Agentlings releases](https://github.com/scanalesespinoza/agentlings/releases).
 
-The Agentlings release is **0.3.0-beta.4** (formerly Codex Float). Download an archive and its
+The Agentlings release is **0.3.0-beta.5** (formerly Codex Float). Download an archive and its
 `.sha256` file from the repository's GitHub Releases page. Extract the entire
 archive; the executable needs its sibling `_internal` directory. Python is bundled.
 Codex CLI and Claude CLI are separate installations and must be available on PATH.
 
-## Changes in beta.4
+## Changes in beta.5
+
+- Starred markers stay out of the Windows taskbar and do not take keyboard focus. Tool-window settings survive transparency changes, switching shapes/themes, and hiding/restoring markers.
+
+## Previous changes in beta.4
 
 - Right-click **Starred** to highlight any Codex or Claude companion with a star (default), circle, diamond, triangle, square, or hexagon. Symbol selection and enabled state persist per session.
 - Markers follow the group direction: left of right stacks, below top stacks, and right of left stacks. Full/half sizing, dragging, visibility, and automatic wrapping account for the marker without covering avatar content.
@@ -87,7 +91,7 @@ menu, statistics and singleton behavior, then shuts it down. Checksums accompany
 each artifact. This does not certify real speaker output or every desktop environment.
 
 Pull requests build all four architectures as downloadable workflow artifacts.
-After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.4`).
+After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.5`).
 The release workflow builds and checks all targets before publishing a single GitHub
 prerelease containing all archives and hashes. Version/tag mismatch fails publishing.
 Signing/notarization requires separate release credentials and remains future work.
