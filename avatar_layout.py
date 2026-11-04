@@ -11,6 +11,13 @@ class _MonitorInfo(C.Structure):
     _fields_ = [('size', W.DWORD), ('monitor', W.RECT), ('work', W.RECT), ('flags', W.DWORD)]
 
 
+def place_companion(entry, x, y):
+    """Keep the requested position available before Tk commits window geometry."""
+    entry['position'] = (x, y)
+    width, height = entry['size']
+    entry['window'].geometry(f'{width}x{height}{x:+d}{y:+d}')
+
+
 def arrange(items, area, anchor='top', margin=12, gap=12):
     """Pack variable-size companions into centered rows or edge columns."""
     left, top, right, bottom = area

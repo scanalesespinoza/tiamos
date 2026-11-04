@@ -14,7 +14,7 @@ import threading
 import time
 from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
-from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
+from avatar_layout import arrange, GlobalHotkeys, monitor_work_area, place_companion
 from session_activity import Activity, safe_preview
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
 from platform_runtime import VERSION, state_directory, lock_file, app_command, background_options, capabilities, open_text, discovery_enabled
@@ -359,17 +359,16 @@ def serve():
             if ident == MENU_ID:
                 group_menu.place(x, y)
                 continue
-            window = widgets[ident]['window']
-            x, y = avatar_origin(x, y, widgets[ident]['size'], layout['mode'], is_starred(ident))
-            if (window.winfo_x(), window.winfo_y()) != (x, y):
-                window.geometry(f'{x:+d}{y:+d}')
+            entry = widgets[ident]
+            x, y = avatar_origin(x, y, entry['size'], layout['mode'], is_starred(ident))
+            if entry['position'] != (x, y):
+                place_companion(entry, x, y)
             positions[ident] = [x, y]
 
     def sync_markers():
         for ident, entry in widgets.items():
-            window = entry['window']
             entry['starred_marker'].sync(
-                (window.winfo_x(), window.winfo_y(), *entry['size']), layout['mode'],
+                (*entry['position'], *entry['size']), layout['mode'],
                 starred.get(ident, {}).get('symbol', 'star') if is_starred(ident) else None,
                 visible=not avatars_hidden and ident not in hidden_ids,
                 background=entry['theme']['background'])
@@ -539,7 +538,7 @@ def serve():
         label.pack(side='bottom', before=title, pady=(0, 5))
         drag = {}
         entry = {'window': window, 'picture': picture, 'title': title, 'label': label, 'state': chat['state'], 'frame': 0, 'size': HALF_SIZE, 'docked': False, 'drag': drag, 'chat_title': chat['title'], 'manual': ident in manual_ids}
-        entry.update(accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
+        entry.update(position=(x, y), accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
         badge = tk.Label(window, text='●', fg=theme['notice'], bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
         entry['badge'] = badge
         xp_bar = tk.Frame(window, bg=accent, height=2, borderwidth=0)
@@ -560,7 +559,7 @@ def serve():
                 entry['manual'] = True
                 manual_ids.add(ident)
                 x, y = clamp(event.x_root - drag['x'], event.y_root - drag['y'], entry['size'], ident)
-                window.geometry(f'{x:+d}{y:+d}')
+                place_companion(entry, x, y)
 
         def release(event):
             save_position(ident, window)
@@ -578,8 +577,8 @@ def serve():
         def change_starred(record):
             starred[ident] = record
             atomic_json(STATE / 'starred.json', starred)
-            x, y = clamp(window.winfo_x(), window.winfo_y(), entry['size'], ident)
-            window.geometry(f'{x:+d}{y:+d}')
+            x, y = clamp(*entry['position'], entry['size'], ident)
+            place_companion(entry, x, y)
             position_group()
             sync_markers()
 
@@ -753,17 +752,17 @@ def serve():
                 entry['docked'] = False
             if entry['size'] != desired:
                 entry['size'] = desired
-                entry['window'].geometry(f'{desired[0]}x{desired[1]}')
+                place_companion(entry, *entry['position'])
                 entry['title'].configure(font=('Segoe UI', 9 if full else 6))
                 entry['title'].pack_configure(pady=(5, 0) if full else 0)
                 entry['label'].configure(font=('Segoe UI', 8 if full else 6))
                 if not full:
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired, ident)
-                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    place_companion(entry, x, y)
                 elif not active:
-                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired, ident)
-                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    x, y = clamp(*entry['position'], desired, ident)
+                    place_companion(entry, x, y)
             unread = notices.pending(ident)
             stats = (entry['chat'].get('activity') or {}).get('stats') or {}
             level = stats.get('level', 1)
@@ -791,17 +790,17 @@ def serve():
                 location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
                 if location:
                     x, y = clamp(*location, desired, ident)
-                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    place_companion(entry, x, y)
                 elif host:
                     # Minimized client coordinates are off-screen. Keep the last
                     # visible position while retaining docking for restoration.
-                    x, y = clamp(entry['window'].winfo_x(), entry['window'].winfo_y(), desired, ident)
-                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    x, y = clamp(*entry['position'], desired, ident)
+                    place_companion(entry, x, y)
                 else:
                     # Keep a closed terminal's avatar clickable for resume.
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired, ident)
-                    entry['window'].geometry(f'{x:+d}{y:+d}')
+                    place_companion(entry, x, y)
             if avatars_hidden or ident in hidden_ids:
                 entry['window'].withdraw()
             elif entry['window'].state() == 'withdrawn':

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock
 
-from avatar_layout import arrange
+from avatar_layout import arrange, place_companion
 from avatar_starred import (SYMBOLS, StarredMarker, StarredMenu, avatar_origin,
                             footprint, marker_rect, occupied_rect, preferences)
 
@@ -119,3 +119,20 @@ class StarredWidgetTests(unittest.TestCase):
         self.assertFalse(window.winfo_exists())
         self.assertIsNone(marker.window)
         marker.destroy()  # Safe when a session disappears after being unstarred.
+
+    def test_markers_share_requested_geometry_before_tk_commits_first_placement_and_move(self):
+        import tkinter as tk
+        avatar = tk.Toplevel(self.root)
+        avatar.withdraw()
+        avatar.overrideredirect(True)
+        marker = StarredMarker(self.root, Mock(), Mock())
+        entry = {'window': avatar}
+        for x, y, width, height in [(300, 200, 178, 152), (400, 100, 89, 76)]:
+            entry['size'] = (width, height)
+            place_companion(entry, x, y)
+            avatar.deiconify()
+            marker.sync((*entry['position'], *entry['size']), 'top', 'star')
+            self.root.update()
+            self.assertEqual((avatar.winfo_x(), avatar.winfo_y()), (x, y))
+            self.assertEqual(marker.status()['position'],
+                             list(marker_rect((x, y, width, height), 'top')[:2]))
