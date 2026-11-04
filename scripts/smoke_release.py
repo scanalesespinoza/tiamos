@@ -55,7 +55,8 @@ def main():
             assert data['capabilities']['app'] == 'Agentlings'
             marker = data['starred'][ident]
             assert marker['visible'] and marker['symbol'] == 'star'
-            assert marker['position'][1] > data['windows'][ident][1] + data['sizes'][ident][1], 'Top marker must be below avatar'
+            gap = marker['position'][1] - data['windows'][ident][1] - data['sizes'][ident][1]
+            assert gap == 4, f'Top marker must have a 4px gap: {marker}, avatar={data["windows"][ident]}, size={data["sizes"][ident]}'
             pid = data['pid']
             owner = psutil.Process(pid)
             run('on')

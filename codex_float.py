@@ -365,10 +365,23 @@ def serve():
                 place_companion(entry, x, y)
             positions[ident] = [x, y]
 
+    marker_geometry = ()
+
     def sync_markers():
+        nonlocal marker_geometry
+        geometry = tuple((ident, str(entry['window']), entry['position'], entry['size'],
+                          not avatars_hidden and ident not in hidden_ids)
+                         for ident, entry in widgets.items() if is_starred(ident))
+        if geometry != marker_geometry:
+            # Commit pending moves once when marked companions change geometry.
+            # Read the actual result: desktop managers can constrain a requested
+            # position (for example, below the macOS menu bar).
+            root.update_idletasks()
+            marker_geometry = geometry
         for ident, entry in widgets.items():
+            window = entry['window']
             entry['starred_marker'].sync(
-                (*entry['position'], *entry['size']), layout['mode'],
+                (window.winfo_x(), window.winfo_y(), *entry['size']), layout['mode'],
                 starred.get(ident, {}).get('symbol', 'star') if is_starred(ident) else None,
                 visible=not avatars_hidden and ident not in hidden_ids,
                 background=entry['theme']['background'])
