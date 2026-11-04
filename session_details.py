@@ -1,5 +1,6 @@
 """A single, non-activating hover card for local session understanding."""
 import time
+import os
 from session_activity import safe_preview, time_text
 from session_metrics import profile_text
 from profile_charts import ProfileChart
@@ -185,6 +186,9 @@ class DetailsCard:
         self.no_activate()
 
     def no_activate(self):
+        if os.name != 'nt':
+            self.window.focusmodel('passive')
+            return
         import ctypes
         from ctypes import wintypes as W
         user = ctypes.windll.user32

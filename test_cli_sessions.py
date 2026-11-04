@@ -4,6 +4,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import time
+import os
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -42,6 +43,7 @@ class CliTests(unittest.TestCase):
             rows = Reader(base, cli_only=True, registration_loader=lambda: records).snapshot(now)
             self.assertEqual({r['id'] for r in rows}, {'cli', 'resumed'})
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows terminal focus')
     def test_live_session_is_focused_without_starting_a_second_cli(self):
         ident = '11111111-1111-1111-1111-111111111111'
         native = SimpleNamespace(inspect=lambda _: SimpleNamespace(pid=123, title='Codex CLI [token]'), activate=lambda _: None)

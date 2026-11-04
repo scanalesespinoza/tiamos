@@ -48,6 +48,12 @@ def foreground_selection(bindings, foreground, selected):
 
 
 class Windows:
+    def __new__(cls):
+        if os.name != 'nt':
+            from platform_runtime import PortableWindows
+            return PortableWindows()
+        return super().__new__(cls)
+
     def __init__(self):
         import ctypes as C
         from ctypes import wintypes as W

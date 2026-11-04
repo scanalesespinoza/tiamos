@@ -1,6 +1,7 @@
 """Small always-available group control and an on-demand history picker."""
 import queue
 import threading
+import os
 
 from session_activity import safe_preview
 from session_history import history_label
@@ -109,9 +110,10 @@ class GroupMenu:
         self.window.title('Codex Float · Menú')
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
-        transparent = '#ff00ff'
+        transparent = '#ff00ff' if os.name == 'nt' else '#263447'
         self.window.configure(bg=transparent)
-        self.window.attributes('-transparentcolor', transparent)
+        if os.name == 'nt':
+            self.window.attributes('-transparentcolor', transparent)
         self.window.geometry(f'{MENU_SIZE}x{MENU_SIZE}+0+0')
         self.canvas = tk.Canvas(self.window, width=MENU_SIZE, height=MENU_SIZE, bg=transparent,
                                 highlightthickness=0, cursor='hand2')

@@ -2,7 +2,6 @@
 import argparse
 import ctypes
 import json
-import msvcrt
 import os
 import signal
 import subprocess
@@ -10,6 +9,7 @@ import sys
 import time
 from cli_sessions import STATE, cli_executable, save, session_id, thread_info
 from window_focus import Windows
+from platform_runtime import lock_file, external_environment
 
 
 def main():
@@ -21,15 +21,13 @@ def main():
     info = thread_info(ident)
     folder = STATE / 'cli-sessions'
     folder.mkdir(parents=True, exist_ok=True)
-    lock = (folder / f'{ident}.lock').open('a+b')
-    lock.seek(0); lock.write(b'1'); lock.flush(); lock.seek(0)
-    try:
-        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-    except OSError:
+    lock = lock_file(folder / f'{ident}.lock')
+    if lock is None:
         print('Esta sesion ya tiene una terminal de Codex Float.')
         return
-    ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
-    ctypes.windll.kernel32.SetConsoleTitleW(f'Codex CLI [{args.token}]')
+    if os.name == 'nt':
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        ctypes.windll.kernel32.SetConsoleTitleW(f'Codex CLI [{args.token}]')
     native = Windows()
     path = folder / f'{ident}.json'
     record = {'id': ident, 'token': args.token, 'pid': os.getpid(), 'started_at': time.time(),
@@ -40,7 +38,7 @@ def main():
     try:
         # The CLI owns Ctrl+C behavior; its watcher must survive turn interrupts.
         signal.signal(signal.SIGINT, lambda *_: None)
-        process = subprocess.Popen([cli_executable(), 'resume', ident, '-C', info['cwd']])
+        process = subprocess.Popen([cli_executable(), 'resume', ident, '-C', info['cwd']], env=external_environment())
         while process.poll() is None:
             if not record['hwnd']:
                 candidates = native.terminal_windows(args.token)

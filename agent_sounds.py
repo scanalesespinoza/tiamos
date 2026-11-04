@@ -44,7 +44,10 @@ def windows_play(path):
 
 
 class Sounds:
-    def __init__(self, directory, player=windows_play, clock=time.monotonic):
+    def __init__(self, directory, player=None, clock=time.monotonic):
+        if player is None:
+            from platform_runtime import PortableAudio
+            player = windows_play if sys.platform == 'win32' else PortableAudio()
         self.directory = Path(directory)
         self.path = self.directory / 'sounds.json'
         self.player, self.clock = player, clock

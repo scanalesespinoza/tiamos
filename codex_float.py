@@ -17,9 +17,10 @@ from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area
 from session_activity import Activity, safe_preview
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
+from platform_runtime import VERSION, state_directory, lock_file, app_command, background_options, capabilities, open_text
 
 BASE = Path(__file__).resolve().parent
-STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
+STATE = state_directory()
 CODEX = Path(os.environ.get('CODEX_HOME', Path.home() / '.codex'))
 
 
@@ -107,8 +108,13 @@ class Reader:
         if discover:
             from terminal_discovery import TerminalDiscovery
             from claude_sessions import ClaudeSessions
-            self.discovery = TerminalDiscovery()
-            self.claude = ClaudeSessions()
+            if os.name == 'nt':
+                self.discovery = TerminalDiscovery()
+                self.claude = ClaudeSessions()
+            else:
+                from portable_discovery import PortableDiscovery, PortableClaudeSessions
+                self.discovery = PortableDiscovery()
+                self.claude = PortableClaudeSessions()
 
     def close(self):
         if self.discovery:
@@ -200,19 +206,12 @@ def serve():
     from agent_sounds import Sounds, SoundEvents, SoundMenu
     from PIL import Image, ImageTk
     import ctypes
-    import msvcrt
     # Keep Tk window coordinates aligned with physical pixels on scaled displays.
-    ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    if os.name == 'nt':
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
     STATE.mkdir(parents=True, exist_ok=True)
-    lock = (STATE / 'instance.lock').open('a+b')
-    lock.seek(0)
-    lock.write(b'1')
-    lock.flush()
-    lock.seek(0)
-    try:
-        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-    except OSError:
-        lock.close()
+    lock = lock_file(STATE / 'instance.lock')
+    if lock is None:
         return
     root = tk.Tk()
     root.withdraw()
@@ -399,6 +398,9 @@ def serve():
             focus_error = None
         except (OSError, RuntimeError, ValueError) as error:
             focus_error = str(error)
+            if os.name != 'nt':
+                from tkinter import messagebox
+                messagebox.showinfo('Codex Float', focus_error, parent=root)
         return 'break'
 
     def bind_to_next_window(ident):
@@ -451,6 +453,9 @@ def serve():
             reader.close()
 
     def bounds():
+        if os.name != 'nt':
+            left, top, right, bottom = monitor_work_area()
+            return left, top, right - left, bottom - top
         user32 = ctypes.windll.user32
         return tuple(user32.GetSystemMetrics(index) for index in (76, 77, 78, 79))
 
@@ -534,7 +539,8 @@ def serve():
         menu.add_command(label='Ver detalles de la sesión', command=lambda: details.show(ident, pinned=True))
         menu.add_command(label='Perfil · nivel y estadísticas', command=lambda: details.show(ident, pinned=True, profile=True))
         menu.add_command(label='Abrir terminal y seleccionar', command=lambda: open_chat(ident))
-        menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident))
+        menu.add_command(label='Vincular: elige una ventana en 8 s', command=lambda: bind_to_next_window(ident),
+                         state='normal' if os.name == 'nt' else 'disabled')
         menu.add_separator()
         appearance_menu = tk.Menu(menu, tearoff=False)
         color_choice = tk.IntVar(value=COLORS.index(accent))
@@ -781,6 +787,7 @@ def serve():
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
+                'capabilities': capabilities(),
                 'chats': len(widgets),
                 'working': sum(v['state'] == 'working' for v in widgets.values()),
                 'error': last_error, 'focus_error': focus_error, 'selected': selected,
@@ -825,7 +832,7 @@ def edit_themes():
     path = STATE / 'themes.json'
     if not path.exists():
         write_config(path, DEFAULTS)
-    subprocess.Popen(['notepad.exe', str(path)])
+    open_text(path)
 
 
 def theme_command(args, parser):
@@ -858,6 +865,7 @@ def theme_command(args, parser):
 
 def main():
     parser = argparse.ArgumentParser(description='Terminales Codex CLI y avatares flotantes de hoy.')
+    parser.add_argument('--version', action='version', version=VERSION)
     parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list', 'theme', 'refresh'])
     parser.add_argument('target', nargs='?', help='Carpeta para new; UUID de sesion para resume.')
     parser.add_argument('--all', action='store_true', help='Incluye chats de la app en list para migrarlos al CLI.')
@@ -898,7 +906,7 @@ def main():
         except (OSError, RuntimeError, ValueError) as error:
             raise SystemExit(str(error))
         if not running():
-            subprocess.run([sys.executable, str(BASE / 'codex_float.py'), 'on'], check=True)
+            subprocess.run(app_command('codex_float.py', 'on'), check=True)
         return
     if args.command == 'list':
         reader = Reader(cli_only=not args.all, discover=not args.all)
@@ -927,9 +935,9 @@ def main():
     else:
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / 'stop').unlink(missing_ok=True)
-        pythonw = Path(sys.executable).with_name('pythonw.exe')
         with (STATE / 'app.log').open('a', encoding='utf-8') as log:
-            subprocess.Popen([str(pythonw), str(BASE / 'codex_float.py'), 'serve'], cwd=BASE, stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
+            subprocess.Popen(app_command('codex_float.py', 'serve', background=True), cwd=BASE,
+                             stdout=log, stderr=log, **background_options())
         for _ in range(60):
             if running():
                 print('Codex Float encendido. Arrastra los terminales; clic derecho para apagar.')

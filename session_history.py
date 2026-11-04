@@ -77,10 +77,11 @@ def claude_record(path, root, modified):
             'updated_at': modified, 'first_seen': modified, 'last_seen': modified}
 
 
-def load_history(codex, claude_roots=()):
+def load_history(codex, claude_roots=(), since=None):
     records, warnings = [], []
     try:
-        records.extend(codex_history(codex))
+        if codex is not None:
+            records.extend(codex_history(codex))
     except (OSError, sqlite3.Error):
         warnings.append('No se pudo consultar el historial de Codex.')
     roots = {Path(os.environ.get('CLAUDE_CONFIG_DIR') or Path.home() / '.claude'),
@@ -91,7 +92,9 @@ def load_history(codex, claude_roots=()):
         for path in itertools.islice((root / 'projects').glob('*/*.jsonl'), 5000):
             try:
                 uuid.UUID(path.stem)
-                candidates.append((path.stat().st_mtime, str(path), root))
+                modified = path.stat().st_mtime
+                if since is None or modified >= since:
+                    candidates.append((modified, str(path), root))
             except (OSError, ValueError):
                 continue
     for modified, path, root in heapq.nlargest(LIMIT, candidates, key=lambda item: item[0]):

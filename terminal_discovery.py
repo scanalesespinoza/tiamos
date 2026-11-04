@@ -122,6 +122,9 @@ def select_tab(record):
 
 
 def native_clients():
+    if os.name != 'nt':
+        from portable_discovery import native_clients as portable_clients
+        return portable_clients()
     kernel = C.WinDLL('kernel32', use_last_error=True)
     kernel.CreateToolhelp32Snapshot.argtypes = [W.DWORD, W.DWORD]
     kernel.CreateToolhelp32Snapshot.restype = W.HANDLE
@@ -280,6 +283,9 @@ class TerminalDiscovery:
 
 
 def refresh_external():
+    if os.name != 'nt':
+        # Reader owns portable metadata discovery. Never invoke the Windows bridge.
+        return
     midnight = dt.datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     with closing(sqlite3.connect((CODEX / 'state_5.sqlite').as_uri() + '?mode=ro', uri=True)) as connection:
         rows = connection.execute('''SELECT id,title,name,cwd,updated_at FROM threads

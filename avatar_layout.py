@@ -3,6 +3,7 @@ import ctypes as C
 from ctypes import wintypes as W
 import queue
 import threading
+import os
 from itertools import chain
 
 
@@ -77,6 +78,12 @@ def register_available(register, unregister):
 
 
 class GlobalHotkeys:
+    def __new__(cls):
+        if os.name != 'nt':
+            from platform_runtime import PortableHotkeys
+            return PortableHotkeys()
+        return super().__new__(cls)
+
     def __init__(self):
         self.events = queue.Queue()
         self.stop = threading.Event()
@@ -121,6 +128,13 @@ class GlobalHotkeys:
 
 
 def monitor_work_area(position=None):
+    if os.name != 'nt':
+        import tkinter as tk
+        root = tk._default_root
+        if root is None:
+            raise RuntimeError('Desktop display is not initialized.')
+        return (root.winfo_vrootx(), root.winfo_vrooty(),
+                root.winfo_vrootx() + root.winfo_vrootwidth(), root.winfo_vrooty() + root.winfo_vrootheight())
     user = C.WinDLL('user32')
     user.MonitorFromPoint.argtypes = [W.POINT, W.DWORD]
     user.MonitorFromPoint.restype = W.HANDLE

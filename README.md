@@ -1,5 +1,7 @@
 # Codex and Claude CLI floating avatars
 
+**Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux/macOS are a portable beta; exact terminal-tab focus, automatic docking, and global shortcuts remain Windows-only. The Windows-specific workflow below continues to apply to the full Windows integration.
+
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
 ## Install

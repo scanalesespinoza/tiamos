@@ -155,6 +155,7 @@ class ClaudeTests(unittest.TestCase):
                 launch_claude({'terminal': {'live': True}})
             launch.assert_not_called()
 
+    @unittest.skipUnless(__import__('os').name == 'nt', 'Windows Terminal launch')
     def test_closed_claude_resume_uses_claude_executable_and_exact_session_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch('claude_sessions.STATE', Path(tmp)), patch('terminal_discovery.native_clients', return_value=[]), \
