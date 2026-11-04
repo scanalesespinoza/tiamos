@@ -2,10 +2,17 @@
 
 Download from [Agentlings releases](https://github.com/scanalesespinoza/agentlings/releases).
 
-The Agentlings release is **0.3.0-beta.2** (formerly Codex Float). Download an archive and its
+The Agentlings release is **0.3.0-beta.3** (formerly Codex Float). Download an archive and its
 `.sha256` file from the repository's GitHub Releases page. Extract the entire
 archive; the executable needs its sibling `_internal` directory. Python is bundled.
 Codex CLI and Claude CLI are separate installations and must be available on PATH.
+
+## Changes in beta.3
+
+- The existing group button shows a discreet activity/attention border and its menu summarizes observed team state and avatar visibility.
+- Restore all hidden companions in one action, reposition the group, toggle quiet mode, or stop Agentlings even when no avatars are visible.
+- History distinguishes loading, empty history, and unmatched searches, preserves read warnings and valid selection, and supports Down/Enter/Escape navigation. Loading and stale selections cannot add duplicate avatars.
+- No larger avatars, additional polling timer, dependency, or background process is introduced. Native group/history tests now run on all release operating systems.
 
 | Archive | Target |
 | --- | --- |
@@ -74,7 +81,7 @@ menu, statistics and singleton behavior, then shuts it down. Checksums accompany
 each artifact. This does not certify real speaker output or every desktop environment.
 
 Pull requests build all four architectures as downloadable workflow artifacts.
-After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.2`).
+After checks pass and the PR is merged, tag the matching version (`v0.3.0-beta.3`).
 The release workflow builds and checks all targets before publishing a single GitHub
 prerelease containing all archives and hashes. Version/tag mismatch fails publishing.
 Signing/notarization requires separate release credentials and remains future work.

@@ -304,6 +304,17 @@ def serve():
             hidden_ids.add(ident)
         atomic_json(STATE / 'visibility.json', {'hidden': sorted(hidden_ids)})
 
+    def show_all():
+        details.hide()
+        hidden_ids.difference_update(widgets)
+        atomic_json(STATE / 'visibility.json', {'hidden': sorted(hidden_ids)})
+        if avatars_hidden:
+            toggle_visibility()
+
+    def set_quiet(value):
+        quiet.set(value)
+        save_quiet()
+
     def save_layout():
         layout.update(manual=sorted(manual_ids), order=layout_order)
         atomic_json(layout_path, layout)
@@ -434,7 +445,9 @@ def serve():
     from group_menu import GroupMenu, HistoryPicker
     history_picker = HistoryPicker(root, history_loader, show_historical, lambda: set(widgets))
     group_menu = GroupMenu(root, details, widgets, lambda: avatars_hidden, lambda: hidden_ids,
-                           toggle_visibility, toggle_one, history_picker.show, today_only, sounds, quiet.get)
+                           toggle_visibility, toggle_one, history_picker.show, today_only, sounds, quiet.get,
+                           show_all=show_all, set_quiet=set_quiet, place_group=apply_layout,
+                           shutdown=lambda: quit_all(), hotkeys=hotkeys.labels)
     position_group()
 
     def worker():
@@ -785,6 +798,7 @@ def serve():
             details.reconcile_pointer()
         if tick_number % 10 == 0:
             details.refresh()
+            group_menu.refresh_indicator()
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
@@ -805,7 +819,8 @@ def serve():
                 'hidden': avatars_hidden,
                 'hidden_avatars': sorted(hidden_ids),
                 'group_menu': {'visible': group_menu.window.state() != 'withdrawn',
-                               'position': [group_menu.window.winfo_x(), group_menu.window.winfo_y()]},
+                               'position': [group_menu.window.winfo_x(), group_menu.window.winfo_y()],
+                               'team': group_menu.summary},
                 'themes': themes.themes, 'theme_error': themes.error,
                 'statistics': {ident: (v['chat'].get('activity') or {}).get('stats') for ident, v in widgets.items()},
                 'theme_file': str(themes.path),
