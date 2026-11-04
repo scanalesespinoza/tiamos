@@ -12,9 +12,10 @@ import sys
 import threading
 import time
 import uuid
+from platform_runtime import state_directory, background_options, app_command, external_environment, launch_terminal
 
 BASE = Path(__file__).resolve().parent
-STATE = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
+STATE = state_directory()
 CODEX = Path(os.environ.get('CODEX_HOME', Path.home() / '.codex'))
 
 
@@ -37,6 +38,11 @@ def session_id(value):
 
 
 def cli_executable():
+    if os.name != 'nt':
+        executable = shutil.which('codex')
+        if executable:
+            return executable
+        raise RuntimeError('Instala Codex CLI y agrega codex al PATH.')
     # Prefer the separately installed CLI, independent of the desktop package.
     npm = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming')) / 'npm/node_modules/@openai/codex/node_modules'
     candidates = list(npm.glob('**/codex.exe')) if npm.exists() else []
@@ -53,7 +59,7 @@ class LocalServer:
     def __enter__(self):
         self.process = subprocess.Popen([cli_executable(), 'app-server'], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
-            creationflags=subprocess.CREATE_NO_WINDOW)
+            env=external_environment(), **background_options())
         self.messages = queue.Queue()
         self.sequence = 0
 
@@ -153,6 +159,8 @@ def launch(ident):
         existing = registrations().get(ident)
     native = Windows()
     if existing and existing['live']:
+        if os.name != 'nt':
+            raise RuntimeError('La sesión ya está abierta. Selecciona su pestaña en la terminal; el enfoque automático requiere Windows.')
         window = native.inspect(existing.get('hwnd'))
         tab = existing.get('kind') == 'tab'
         if window and window.pid == existing.get('window_pid') and (tab or existing.get('token') in window.title):
@@ -177,13 +185,20 @@ def launch(ident):
         raise RuntimeError('La sesion tiene un turno activo. Espera su fin o vincula su terminal existente.')
     if not Path(info['cwd']).is_dir():
         raise RuntimeError(f'La carpeta de la sesion ya no existe: {info["cwd"]}')
+    if os.name != 'nt':
+        from portable_discovery import native_clients
+        if any(client['provider'] == 'codex' and Path(client['cwd']).resolve() == Path(info['cwd']).resolve()
+               for client in native_clients()):
+            raise RuntimeError('Codex ya está abierto en esta carpeta. Selecciona su pestaña para evitar duplicar clientes.')
     token = uuid.uuid4().hex[:12]
     save(pending_path, {'requested_at': time.time(), 'token': token})
-    python = str(Path(sys.executable).with_name('python.exe'))
-    command = [python, str(BASE / 'terminal_session.py'), '--session', ident, '--token', token]
+    command = app_command('terminal_session.py', '--session', ident, '--token', token)
+    python = command[0]
     terminal = shutil.which('wt.exe')
     try:
-        if terminal and not any(';' in value for value in (info['cwd'], str(BASE), python)):
+        if os.name != 'nt':
+            launch_terminal(command, info['cwd'])
+        elif terminal and not any(';' in value for value in (info['cwd'], str(BASE), python)):
             # Fixed session-specific title + a dedicated window removes tab ambiguity.
             subprocess.Popen([terminal, '-w', 'new', 'new-tab', '--title', f'Codex CLI [{token}]',
                 '--suppressApplicationTitle', '-d', info['cwd'], *command], cwd=info['cwd'])

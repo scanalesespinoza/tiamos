@@ -242,6 +242,11 @@ class ClaudeSessions:
 
 
 def claude_executable():
+    if os.name != 'nt':
+        executable = shutil.which('claude')
+        if executable:
+            return executable
+        raise RuntimeError('Instala Claude CLI y agrega claude al PATH.')
     # Prefer the explicitly configured npm installation over a retained native copy.
     candidates = [Path.home() / '.npm-global/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
         Path(os.environ.get('APPDATA', '')) / 'npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe',
@@ -254,12 +259,16 @@ def claude_executable():
 
 def launch_claude(chat):
     if (chat.get('terminal') or {}).get('live'):
+        if os.name != 'nt':
+            raise RuntimeError('Claude sigue abierto. Selecciona su pestaña en tu terminal.')
         raise RuntimeError('Claude sigue abierto. Vincula su ventana desde el menú del avatar.')
     raw_id = str(uuid.UUID(chat['session_id']))
     from terminal_discovery import native_clients
     for client in native_clients():
         if client.get('provider') != 'claude':
             continue
+        if os.name != 'nt' and Path(client['cwd']).resolve() == Path(chat['cwd']).resolve():
+            raise RuntimeError('Claude ya está abierto en esta carpeta. Selecciona su pestaña antes de reanudar otra sesión.')
         root = Path(client.get('config_dir') or Path.home() / '.claude')
         record = read(root / 'sessions' / f'{client["pid"]}.json', {})
         if record.get('sessionId') == raw_id and valid_session(record, client):
@@ -275,7 +284,10 @@ def launch_claude(chat):
     command = [executable, '--resume', raw_id]
     save(pending_path, {'requested_at': time.time()})
     try:
-        if terminal and not any(';' in value for value in (cwd, executable)):
+        if os.name != 'nt':
+            from platform_runtime import launch_terminal
+            launch_terminal(command, cwd)
+        elif terminal and not any(';' in value for value in (cwd, executable)):
             subprocess.Popen([terminal, '-w', 'new', 'new-tab', '-d', cwd, *command], cwd=cwd)
         else:
             subprocess.Popen(command, cwd=cwd, creationflags=subprocess.CREATE_NEW_CONSOLE)
