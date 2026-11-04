@@ -10,6 +10,7 @@ Codex CLI and Claude CLI are separate installations and must be available on PAT
 ## Changes in beta.6
 
 - The cap accessory has a rounded crown, an asymmetric visor, a small badge, and shading matched to the companion's accent. The silhouette stays recognizable at full and half size; existing cap selections update automatically.
+- Antennas have a defined mount and a shaded round tip; headphones have an arched padded band and distinct ear cushions; ears have a larger pointed silhouette and contrasting inner panels. All accessories follow the existing accent palette and keep the same sprite dimensions and animation timing.
 
 ## Previous changes in beta.5
 
