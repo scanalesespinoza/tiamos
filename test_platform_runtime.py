@@ -29,7 +29,7 @@ class PlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
             'CODEX_FLOAT_STATE_DIR':str(Path(folder)/'legacy'), 'AGENTLINGS_STATE_DIR':str(Path(folder)/'current'),
             'CODEX_FLOAT_DISABLE_DISCOVERY':'1', 'AGENTLINGS_DISABLE_DISCOVERY':'0'}):
-            self.assertEqual(state_directory(), Path(folder)/'current')
+            self.assertEqual(state_directory(), (Path(folder)/'current').resolve())
             self.assertTrue(discovery_enabled())
             os.environ.pop('AGENTLINGS_DISABLE_DISCOVERY')
             self.assertFalse(discovery_enabled())
