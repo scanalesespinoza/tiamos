@@ -8,7 +8,7 @@ import subprocess
 import sys
 import uuid
 
-VERSION = '0.3.0-beta.3'
+VERSION = '0.3.0-beta.4'
 APP_NAME = 'Agentlings'
 
 

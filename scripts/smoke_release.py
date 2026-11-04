@@ -20,6 +20,8 @@ def main():
         state = root / 'state'
         now = dt.datetime.now(dt.timezone.utc)
         ident = '11111111-2222-4333-8444-555555555555'
+        state.mkdir()
+        (state / 'starred.json').write_text(json.dumps({ident: {'enabled': True, 'symbol': 'star'}}), encoding='utf-8')
         trace = codex / 'session.jsonl'
         records = [{'timestamp': now.isoformat(), 'type': 'event_msg', 'payload': {'type': event, 'turn_id': 'test'}}
                    for event in ('task_started', 'task_complete')]
@@ -42,7 +44,7 @@ def main():
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 data = status()
-                if data.get('chats') == 1:
+                if data.get('chats') == 1 and (data.get('starred', {}).get(ident) or {}).get('visible'):
                     break
                 time.sleep(.25)
             assert data.get('running') and data.get('chats') == 1, 'Expected exactly one synthetic avatar'
@@ -51,6 +53,10 @@ def main():
             assert data['statistics'][ident]['level'] == 1
             assert data['sounds']['enabled'] and data['sounds']['volume'] == 25
             assert data['capabilities']['app'] == 'Agentlings'
+            marker = data['starred'][ident]
+            assert marker['visible'] and marker['symbol'] == 'star'
+            gap = marker['position'][1] - data['windows'][ident][1] - data['sizes'][ident][1]
+            assert gap == 4, f'Top marker must have a 4px gap: {marker}, avatar={data["windows"][ident]}, size={data["sizes"][ident]}'
             pid = data['pid']
             owner = psutil.Process(pid)
             run('on')
