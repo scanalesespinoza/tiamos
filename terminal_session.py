@@ -23,7 +23,7 @@ def main():
     folder.mkdir(parents=True, exist_ok=True)
     lock = lock_file(folder / f'{ident}.lock')
     if lock is None:
-        print('Esta sesion ya tiene una terminal de Codex Float.')
+        print('Esta sesion ya tiene una terminal de Agentlings.')
         return
     if os.name == 'nt':
         ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))

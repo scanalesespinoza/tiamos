@@ -14,7 +14,7 @@ import psutil
 
 def main():
     executable = str(Path(sys.argv[1]).resolve())
-    with tempfile.TemporaryDirectory(prefix='codex-float-smoke-') as folder:
+    with tempfile.TemporaryDirectory(prefix='agentlings-smoke-') as folder:
         root = Path(folder)
         codex = root / 'codex'; codex.mkdir()
         state = root / 'state'
@@ -29,8 +29,8 @@ def main():
             db.execute('INSERT INTO threads VALUES (?,?,?,?,?,0,?,NULL)',
                        (ident, 'Release smoke session', str(root), str(trace), 'cli', now.timestamp()))
             db.commit()
-        env = dict(os.environ, CODEX_FLOAT_STATE_DIR=str(state), CODEX_HOME=str(codex),
-                   CLAUDE_CONFIG_DIR=str(root / 'claude'), CODEX_FLOAT_DISABLE_DISCOVERY='1')
+        env = dict(os.environ, AGENTLINGS_STATE_DIR=str(state), CODEX_HOME=str(codex),
+                   CLAUDE_CONFIG_DIR=str(root / 'claude'), AGENTLINGS_DISABLE_DISCOVERY='1')
         def run(*args):
             return subprocess.run([executable, *args], env=env, capture_output=True, text=True, timeout=35, check=True)
         def status():
@@ -50,11 +50,19 @@ def main():
             assert data['group_menu']['visible'] and data['visible'][ident]
             assert data['statistics'][ident]['level'] == 1
             assert data['sounds']['enabled'] and data['sounds']['volume'] == 25
+            assert data['capabilities']['app'] == 'Agentlings'
             pid = data['pid']
             owner = psutil.Process(pid)
             run('on')
             assert status()['pid'] == pid, 'Duplicate monitor'
-            print(json.dumps({'platform':sys.platform,'avatar':True,'menu':True,'xp':True,'single_instance':True}))
+            alias = Path(executable).with_name('codex-float.cmd' if os.name == 'nt' else 'codex-float')
+            alias_command = [str(alias), 'status']
+            if os.name == 'nt':
+                alias_command = [os.environ.get('COMSPEC', 'cmd.exe'), '/d', '/c', *alias_command]
+            reply = subprocess.run(alias_command, env=env, capture_output=True, text=True, timeout=15, check=True)
+            assert json.loads(reply.stdout)['pid'] == pid, 'Legacy alias uses a different monitor'
+            print(json.dumps({'platform':sys.platform,'avatar':True,'menu':True,'xp':True,
+                              'single_instance':True,'legacy_alias':True}))
         finally:
             try:
                 run('off')

@@ -8,25 +8,37 @@ import subprocess
 import sys
 import uuid
 
-VERSION = '0.3.0-beta.1'
+VERSION = '0.3.0-beta.2'
+APP_NAME = 'Agentlings'
 
 
 def state_directory():
-    override = os.environ.get('CODEX_FLOAT_STATE_DIR')
+    override = os.environ.get('AGENTLINGS_STATE_DIR') or os.environ.get('CODEX_FLOAT_STATE_DIR')
     if override:
         return Path(override).expanduser().resolve()
     if os.name == 'nt':
-        return Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'CodexFloat'
-    if sys.platform == 'darwin':
-        return Path.home() / 'Library/Application Support/CodexFloat'
-    return Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'codex-float'
+        base = Path(os.environ.get('LOCALAPPDATA', Path.home()))
+        current, legacy = base / APP_NAME, base / 'CodexFloat'
+    elif sys.platform == 'darwin':
+        base = Path.home() / 'Library/Application Support'
+        current, legacy = base / APP_NAME, base / 'CodexFloat'
+    else:
+        base = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
+        current, legacy = base / 'agentlings', base / 'codex-float'
+    # Share existing preferences and locks with older running versions. No copy,
+    # move, or second independent monitor is introduced by the product rename.
+    return legacy if legacy.is_dir() else current
+
+
+def discovery_enabled():
+    return os.environ.get('AGENTLINGS_DISABLE_DISCOVERY', os.environ.get('CODEX_FLOAT_DISABLE_DISCOVERY')) != '1'
 
 
 def background_options():
     return {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session': True}
 
 
-def app_command(script='codex_float.py', *args, background=False):
+def app_command(script='agentlings.py', *args, background=False):
     if getattr(sys, 'frozen', False):
         mode = ['terminal-session'] if script == 'terminal_session.py' else []
         return [sys.executable, *mode, *args]
@@ -86,7 +98,7 @@ class PortableHotkeys:
 
 def capabilities():
     windows = os.name == 'nt'
-    return {'platform': sys.platform, 'version': VERSION, 'terminal_tab_focus': windows,
+    return {'app': APP_NAME, 'platform': sys.platform, 'version': VERSION, 'terminal_tab_focus': windows,
             'automatic_docking': windows, 'global_hotkeys': windows,
             'desktop_mode': 'native' if windows else 'portable-beta'}
 
