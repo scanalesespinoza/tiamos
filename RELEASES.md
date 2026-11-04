@@ -47,6 +47,8 @@ State locations: `%LOCALAPPDATA%/CodexFloat` on Windows,
 `~/Library/Application Support/CodexFloat` on macOS, and
 `${XDG_STATE_HOME:-~/.local/state}/codex-float` on Linux.
 `CODEX_FLOAT_STATE_DIR` overrides the state folder for isolated testing.
+`CODEX_FLOAT_DISABLE_DISCOVERY=1` disables process/terminal discovery for synthetic
+tests; it is not intended for normal CLI monitoring.
 
 ## Build and publish
 

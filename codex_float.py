@@ -262,7 +262,8 @@ def serve():
     stop = threading.Event()
     shown_history = load_json(STATE / 'shown-history.json', {})
     hidden_ids = set(load_json(STATE / 'visibility.json', {}).get('hidden', []))
-    reader = Reader(cli_only=True, discover=True, included_loader=shown_history.copy)
+    reader = Reader(cli_only=True, discover=os.environ.get('CODEX_FLOAT_DISABLE_DISCOVERY') != '1',
+                    included_loader=shown_history.copy)
     last_error = None
     native = Windows()
     bindings_path = STATE / 'window-bindings.json'
@@ -936,13 +937,16 @@ def main():
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / 'stop').unlink(missing_ok=True)
         with (STATE / 'app.log').open('a', encoding='utf-8') as log:
-            subprocess.Popen(app_command('codex_float.py', 'serve', background=True), cwd=BASE,
-                             stdout=log, stderr=log, **background_options())
+            child = subprocess.Popen(app_command('codex_float.py', 'serve', background=True), cwd=BASE,
+                                     stdout=log, stderr=log, **background_options())
         for _ in range(60):
             if running():
                 print('Codex Float encendido. Arrastra los terminales; clic derecho para apagar.')
                 return
             time.sleep(.1)
+        if child.poll() is None:
+            child.terminate()
+            child.wait(timeout=5)
         raise SystemExit(f'No se pudo iniciar. Revisa {STATE / "app.log"}')
 
 

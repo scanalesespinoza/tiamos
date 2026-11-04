@@ -15,6 +15,7 @@ def main():
     subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
                     '--name', 'codex-float', '--distpath', str(ROOT / 'dist'),
                     '--workpath', str(ROOT / 'build'), '--specpath', str(ROOT / 'build'),
+                    '--hidden-import', 'PIL._tkinter_finder',
                     '--add-data', str(ROOT / 'terminal_tabs.ps1') + ':.' , str(ROOT / 'launcher.py')], check=True, cwd=ROOT)
     output = ROOT / 'dist/codex-float'
     shutil.copy2(ROOT / 'README.md', output)
