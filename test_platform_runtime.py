@@ -1,4 +1,5 @@
 import json
+import datetime as dt
 import os
 from pathlib import Path
 import sys
@@ -7,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from platform_runtime import app_command, capabilities, external_environment, launch_terminal, lock_file, state_directory
-from portable_discovery import PortableDiscovery, match_client
+from portable_discovery import PortableDiscovery, PortableClaudeSessions, match_client
 
 
 class PlatformTests(unittest.TestCase):
@@ -74,6 +75,19 @@ class PlatformTests(unittest.TestCase):
 
     def test_capabilities_do_not_claim_unimplemented_native_focus(self):
         self.assertEqual(capabilities()['terminal_tab_focus'], os.name == 'nt')
+
+    def test_historical_pin_does_not_replace_fresh_claude_metadata(self):
+        with tempfile.TemporaryDirectory() as folder:
+            now = dt.datetime.now().astimezone()
+            ident = 'claude:11111111-2222-4333-8444-555555555555'
+            fresh = {'id':ident,'session_id':ident[7:],'provider':'claude','cwd':folder,
+                     'config_dir':folder,'first_seen':now.timestamp(),'last_seen':now.timestamp()}
+            old = dict(fresh,last_seen=now.timestamp()-86400)
+            sessions = PortableClaudeSessions(Path(folder)/'state')
+            with patch('portable_discovery.load_history',return_value=([fresh],[])):
+                rows = sessions.metadata([],now,{ident:old})
+            self.assertTrue(rows[0]['recent'])
+            self.assertEqual(sessions.known[ident]['last_seen'],now.timestamp())
 
 
 if __name__ == '__main__':

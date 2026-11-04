@@ -115,8 +115,9 @@ class PortableClaudeSessions(ClaudeSessions):
             records, _ = load_history(None, roots, since=midnight)
             self.known.update({record['id']: history_pin(record) for record in records})
             self.scanned_at, self.day = time.monotonic(), now.date()
-        self.known.update({key: history_pin(record) for key, record in included.items()
-                           if record.get('provider') == 'claude'})
+        for key, record in included.items():
+            if record.get('provider') == 'claude':
+                self.known.setdefault(key, history_pin(record))
         metadata, self.live = [], {}
         candidates = list(self.known.values())
         for ident, info in self.known.items():

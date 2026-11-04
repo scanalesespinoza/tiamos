@@ -259,6 +259,8 @@ def claude_executable():
 
 def launch_claude(chat):
     if (chat.get('terminal') or {}).get('live'):
+        if os.name != 'nt':
+            raise RuntimeError('Claude sigue abierto. Selecciona su pestaña en tu terminal.')
         raise RuntimeError('Claude sigue abierto. Vincula su ventana desde el menú del avatar.')
     raw_id = str(uuid.UUID(chat['session_id']))
     from terminal_discovery import native_clients
