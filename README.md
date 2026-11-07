@@ -88,6 +88,8 @@ The caption, details, group summary, inbox and input sounds share the same inter
 
 Agentlings never infers a need for human input from elapsed time. Missing or stale data does not become completion, interruption or a new request. A known closed terminal remains **CLI cerrado** and can be resumed. The `companions` section in `agentlings status` includes the interpreted `status` alongside the displayed sprite.
 
+The activity card also shows the last observed test/build check, its reported outcome and age, and whether file edits were observed afterward. A tool's reported success does not establish test coverage or certify the current workspace. Unknown outcomes remain unknown. These summaries use the existing fixed activity categories, retain only one check and one edit in memory, and reconstruct from the existing session reader without storing commands or output or launching any checks. Equal timestamps preserve observed event order. The CLI exposes this metadata under `activity.<session>.verification`.
+
 ## Attention inbox
 
 Open **⋮ → Necesita tu atención…** to review explicit requests for input, observed tool errors, interrupted turns, and unread results in one list. The group ring remains amber while notices are pending, including hidden companions. Enter opens the selected available session; **Marcar visto** or Ctrl+Enter acknowledges an error, interruption, or result. Escape closes the inbox. Requests for input must be answered in their original terminal and cannot be dismissed as resolved here. An ordinary tool wait never becomes a request for human input.

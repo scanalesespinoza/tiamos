@@ -4,6 +4,7 @@ import json
 import re
 import unicodedata
 from session_metrics import SessionMetrics
+from session_verification import VerificationEvidence
 
 
 def text_content(content):
@@ -96,6 +97,7 @@ class Activity:
         self.last_completion_error = False
         self.last_result = ''
         self.metrics = SessionMetrics()
+        self.verification = VerificationEvidence()
 
     def add_action(self, label, stamp, outcome='info', ident=None):
         if ident and ident in self.seen:
@@ -107,6 +109,7 @@ class Activity:
             self.last_error_at = max(self.last_error_at or 0, stamp.timestamp())
         self.count += 1
         self.metrics.action(label, outcome, stamp)
+        self.verification.observe(label, outcome, stamp)
         self.updated_at = stamp.timestamp()
 
     def observe(self, record, stamp):
@@ -200,4 +203,5 @@ class Activity:
             'last_completed_at': self.last_completed_at, 'last_completion_error': self.last_completion_error,
             'last_error_at': self.last_error_at, 'last_interrupted_at': self.last_interrupted_at,
             'last_result': self.last_result, 'stats': self.metrics.summary(),
+            'verification': self.verification.summary(),
             'updated_at': self.updated_at, 'action_count': self.count, 'actions': list(self.actions)}

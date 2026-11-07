@@ -899,7 +899,7 @@ def serve():
                     'visual': v['visual'], 'status': status_code(dict(v['chat'], unavailable=v.get('unavailable'))),
                     'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
                 'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)
-                    for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count')} for ident, v in widgets.items()},
+                    for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count', 'verification')} for ident, v in widgets.items()},
             })
         tick_number += 1
         root.after(100, tick)

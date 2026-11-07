@@ -25,6 +25,11 @@ def main():
         trace = codex / 'session.jsonl'
         records = [{'timestamp': now.isoformat(), 'type': 'event_msg', 'payload': {'type': event, 'turn_id': 'test'}}
                    for event in ('task_started', 'task_complete')]
+        for item in reversed([
+                {'type': 'CommandExecution', 'id': 'validation', 'command': 'python -m unittest synthetic', 'exit_code': 0},
+                {'type': 'FileChange', 'id': 'edit-after-validation', 'status': 'completed'}]):
+            records.insert(1, {'timestamp': now.isoformat(), 'type': 'event_msg',
+                               'payload': {'type': 'item_completed', 'turn_id': 'test', 'item': item}})
         trace.write_text('\n'.join(json.dumps(record) for record in records) + '\n', encoding='utf-8')
         with closing(sqlite3.connect(codex / 'state_5.sqlite')) as db:
             db.execute('CREATE TABLE threads (id,title,cwd,rollout_path,source,archived,updated_at,attached_thread_parent_id)')
@@ -54,6 +59,8 @@ def main():
             assert data['sounds']['enabled'] and data['sounds']['volume'] == 25
             assert data['capabilities']['app'] == 'Agentlings'
             assert data['companions'][ident]['status'] == 'completed'
+            evidence = data['activity'][ident]['verification']
+            assert evidence['check_outcome'] == 'ok' and evidence['edits_after_check']
             marker = data['starred'][ident]
             assert marker['visible'] and marker['symbol'] == 'star'
             gap = marker['position'][1] - data['windows'][ident][1] - data['sizes'][ident][1]
@@ -105,6 +112,7 @@ def main():
             assert not data['visible'][ident] and not data['starred'][ident]['visible']
             assert data['companions'][ident]['visual'] is None, 'Hidden companions must not render animations'
             assert data['companions'][ident]['status'] == 'working', 'A resumed turn must not remain interrupted'
+            assert data['activity'][ident]['verification'] == evidence, 'Verification evidence must reconstruct on restart'
             previous_error = json.loads(metadata)['sessions'][ident]['error_at']
             stamp = dt.datetime.now(dt.timezone.utc)
             with trace.open('a', encoding='utf-8') as stream:
