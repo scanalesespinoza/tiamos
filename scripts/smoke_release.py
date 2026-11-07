@@ -91,6 +91,7 @@ def main():
             assert 'PRIVATE_SMOKE_OUTPUT' not in metadata and 'synthetic-check' not in metadata
             run('off')
             owner.wait(timeout=10)
+            (state / 'visibility.json').write_text(json.dumps({'hidden': [ident]}), encoding='utf-8')
             run('on')
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
@@ -100,8 +101,24 @@ def main():
                 time.sleep(.25)
             assert data.get('attention', {}).get('pending') == 3, 'Unseen events must survive restart'
             owner = psutil.Process(data['pid'])
+            assert not data['visible'][ident] and not data['starred'][ident]['visible']
+            assert data['companions'][ident]['visual'] is None, 'Hidden companions must not render animations'
+            previous_error = json.loads(metadata)['sessions'][ident]['error_at']
+            stamp = dt.datetime.now(dt.timezone.utc)
+            with trace.open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps({'timestamp': stamp.isoformat(), 'type': 'event_msg', 'payload': {
+                    'type': 'item_completed', 'turn_id': 'after-interruption', 'item': {
+                        'id': 'hidden-failure', 'type': 'CommandExecution', 'exit_code': 1}}}) + '\n')
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                observed = json.loads((state / 'attention.json').read_text(encoding='utf-8'))
+                if observed['sessions'][ident]['error_at'] > previous_error:
+                    break
+                time.sleep(.25)
+            assert observed['sessions'][ident]['error_at'] == stamp.timestamp(), 'Hidden sessions must still observe new events'
             print(json.dumps({'platform':sys.platform,'avatar':True,'menu':True,'xp':True,
-                              'single_instance':True,'legacy_alias':True,'attention_restart':True}))
+                              'single_instance':True,'legacy_alias':True,'attention_restart':True,
+                              'hidden_observation':True}))
         finally:
             try:
                 run('off')

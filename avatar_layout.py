@@ -15,7 +15,10 @@ def place_companion(entry, x, y):
     """Keep the requested position available before Tk commits window geometry."""
     entry['position'] = (x, y)
     width, height = entry['size']
-    entry['window'].geometry(f'{width}x{height}{x:+d}{y:+d}')
+    geometry = f'{width}x{height}{x:+d}{y:+d}'
+    if geometry != entry.get('geometry'):
+        entry['window'].geometry(geometry)
+        entry['geometry'] = geometry
 
 
 def arrange(items, area, anchor='top', margin=12, gap=12):

@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 import time
-from window_focus import Windows, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
+from window_focus import Windows, WindowSnapshot, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area, place_companion
 from session_activity import Activity, safe_preview
@@ -207,6 +207,7 @@ def serve():
     from agent_sounds import Sounds, SoundEvents, SoundMenu
     from session_attention import AttentionInbox
     from attention_inbox import AttentionWindow
+    from avatar_paint import AvatarPaint
     from PIL import Image, ImageTk
     import ctypes
     # Keep Tk window coordinates aligned with physical pixels on scaled displays.
@@ -253,14 +254,12 @@ def serve():
                 theme = themes.get(entry['chat'].get('provider'))
                 entry['theme'] = theme
                 for surface in ('window', 'title', 'picture', 'label', 'badge'):
-                    entry[surface].configure(bg=theme['background'])
-                entry['title'].configure(fg=theme['foreground'])
-                entry['label'].configure(fg=theme['foreground'])
-                entry['badge'].configure(fg=theme['notice'])
+                    entry['paint'].configure(surface, bg=theme['background'])
+                entry['paint'].configure('title', fg=theme['foreground'])
+                entry['paint'].configure('label', fg=theme['foreground'])
+                entry['paint'].configure('badge', fg=theme['notice'])
                 entry['animations'].clear()
                 entry['frame'] = 0
-                visual = entry['visual'] or visual_state(entry['chat'])
-                entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
 
     updates = queue.Queue(maxsize=1)
     stop = threading.Event()
@@ -382,20 +381,23 @@ def serve():
             root.update_idletasks()
             marker_geometry = geometry
         for ident, entry in widgets.items():
+            if not is_starred(ident):
+                entry['starred_marker'].destroy()
+                continue
             window = entry['window']
             entry['starred_marker'].sync(
                 (window.winfo_x(), window.winfo_y(), *entry['size']), layout['mode'],
-                starred.get(ident, {}).get('symbol', 'star') if is_starred(ident) else None,
+                starred.get(ident, {}).get('symbol', 'star'),
                 visible=not avatars_hidden and ident not in hidden_ids,
                 background=entry['theme']['background'])
 
-    def bound_window(ident):
+    def bound_window(ident, inspect=None):
         binding = bindings.get(ident)
         if binding:
             terminal = widgets.get(ident, {}).get('terminal') or {}
             if not binding.get('manual') and terminal.get('kind') == 'unbound':
                 return None
-            window = native.inspect(binding['hwnd'])
+            window = (inspect or native.inspect)(binding['hwnd'])
             if window and window.pid == binding['pid'] and window.executable == binding['executable']:
                 return window
         return None
@@ -571,6 +573,7 @@ def serve():
         entry.update(position=(x, y), accent=accent, accessory=accessory, theme=theme, animations={}, visual=None, celebrate_until=0, greet_until=0)
         badge = tk.Label(window, text='●', fg=theme['notice'], bg=theme['background'], font=('Segoe UI', 8), borderwidth=0, padx=0, pady=0)
         entry['badge'] = badge
+        entry['paint'] = AvatarPaint(window=window, title=title, picture=picture, label=label, badge=badge)
         xp_bar = tk.Frame(window, bg=accent, height=2, borderwidth=0)
         entry['xp_bar'] = xp_bar
         entry['chat'] = chat
@@ -626,10 +629,8 @@ def serve():
             accessory_choice.set(accessory)
             entry.update(accent=accent, accessory=accessory, frame=0)
             entry['xp_bar'].configure(bg=accent)
-            entry['title'].configure(fg=entry['theme']['foreground'])
+            entry['paint'].configure('title', fg=entry['theme']['foreground'])
             entry['animations'].clear()
-            visual = entry['visual'] or visual_state(entry['chat'])
-            entry['picture'].configure(image=animation(entry, visual)[0 if entry['size'] == FULL_SIZE else 1][0])
             details.refresh()
 
         color_menu = tk.Menu(appearance_menu, tearoff=False)
@@ -675,6 +676,7 @@ def serve():
 
     def tick():
         nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
+        observed_windows = WindowSnapshot(native.inspect)
         history_picker.poll()
         if tick_number % 10 == 0:
             refresh_themes()
@@ -726,7 +728,7 @@ def serve():
                     entry['chat_title'] = chat['title']
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
-                    host = native.inspect(terminal.get('hwnd')) if terminal.get('live') else None
+                    host = observed_windows.inspect(terminal.get('hwnd')) if terminal.get('live') else None
                     if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or terminal.get('token') in host.title):
                         binding = {'hwnd': host.hwnd, 'pid': host.pid, 'executable': host.executable, 'manual': False}
                         if bindings.get(chat['id']) != binding:
@@ -736,7 +738,7 @@ def serve():
         except queue.Empty:
             pass
         foreground = native.foreground()
-        active_window = native.inspect(foreground)
+        active_window = observed_windows.inspect(foreground)
         if bind_request:
             ident, deadline = bind_request
             if ident not in widgets or time.monotonic() > deadline:
@@ -750,8 +752,8 @@ def serve():
             if ident not in widgets or time.monotonic() > deadline:
                 pending = None
                 focus_error = 'No se encontró la terminal de la sesión.'
-            elif (widgets[ident].get('terminal') or {}).get('live') and bound_window(ident):
-                target = bound_window(ident)
+            elif (widgets[ident].get('terminal') or {}).get('live') and bound_window(ident, observed_windows.inspect):
+                target = bound_window(ident, observed_windows.inspect)
                 if native.activate(target):
                     associate(ident, target)
                 else:
@@ -759,7 +761,7 @@ def serve():
                 pending = None
         valid_bindings = {}
         for ident, entry in widgets.items():
-            host = bound_window(ident)
+            host = bound_window(ident, observed_windows.inspect)
             if not host or not host.visible or host.minimized:
                 continue
             terminal = entry.get('terminal') or {}
@@ -777,6 +779,11 @@ def serve():
                 widgets[selected]['docked'] = True
         for ident, entry in widgets.items():
             entry['unavailable'] = bool(last_error)
+            host = bound_window(ident, observed_windows.inspect)
+            entry['minimized'] = bool(host and host.minimized)
+            if avatars_hidden or ident in hidden_ids:
+                entry['paint'].visible(False)
+                continue
             desired = avatar_size(ident, selected)
             full = desired == FULL_SIZE
             active = ident == selected
@@ -785,9 +792,9 @@ def serve():
             if entry['size'] != desired:
                 entry['size'] = desired
                 place_companion(entry, *entry['position'])
-                entry['title'].configure(font=('Segoe UI', 9 if full else 6))
+                entry['paint'].configure('title', font=('Segoe UI', 9 if full else 6))
                 entry['title'].pack_configure(pady=(5, 0) if full else 0)
-                entry['label'].configure(font=('Segoe UI', 8 if full else 6))
+                entry['paint'].configure('label', font=('Segoe UI', 8 if full else 6))
                 if not full:
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired, ident)
@@ -799,7 +806,7 @@ def serve():
             stats = (entry['chat'].get('activity') or {}).get('stats') or {}
             level = stats.get('level', 1)
             display_title = f'N{level} · ' + (entry['theme']['name'] + ' · ' if full else '') + entry['chat_title']
-            entry['title'].configure(text=display_title[:(22 if full else 10) if unread else (25 if full else 12)])
+            entry['paint'].configure('title', text=display_title[:(22 if full else 10) if unread else (25 if full else 12)])
             progress = stats.get('progress', 0) / stats.get('needed', 100)
             xp_signature = (progress, desired)
             if xp_signature != entry.get('xp_signature'):
@@ -809,15 +816,8 @@ def serve():
                     entry['xp_bar'].lift()
                 else:
                     entry['xp_bar'].place_forget()
-            if unread:
-                entry['badge'].configure(font=('Segoe UI', 9 if full else 7))
-                entry['badge'].place(relx=1, x=-3, y=3 if full else 0, anchor='ne')
-                entry['badge'].lift()
-            else:
-                entry['badge'].place_forget()
-            host = bound_window(ident)
-            entry['minimized'] = bool(host and host.minimized)
-            entry['window'].configure(highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if active else '#46536b')
+            entry['paint'].notice(unread, full)
+            entry['paint'].configure('window', highlightbackground='#858585' if entry['minimized'] else '#77e4c8' if active else '#46536b')
             if active and entry['docked']:
                 location = dock_position(host.client, desired, host.dpi) if host and host.visible and not host.minimized else None
                 if location:
@@ -833,10 +833,6 @@ def serve():
                     entry['docked'] = False
                     x, y = clamp(*positions[ident], desired, ident)
                     place_companion(entry, x, y)
-            if avatars_hidden or ident in hidden_ids:
-                entry['window'].withdraw()
-            elif entry['window'].state() == 'withdrawn':
-                entry['window'].deiconify()
             state = entry['state']
             now = time.monotonic()
             celebrating = now < entry['celebrate_until'] and not quiet.get() and not last_error
@@ -847,7 +843,7 @@ def serve():
             elif state == 'working' or tick_number % 2 == 0:
                 entry['frame'] = (entry['frame'] + 1) % 8
             entry['visual'] = visual
-            entry['picture'].configure(image=animation(entry, visual)[0 if full else 1][entry['frame']])
+            entry['paint'].configure('picture', image=animation(entry, visual)[0 if full else 1][entry['frame']])
             caption = compact_caption(entry['chat'], full)
             if state != 'working' and unread:
                 caption = '¡Turno listo!' if celebrating else 'Resultado nuevo' if full else 'Nuevo'
@@ -857,8 +853,9 @@ def serve():
                 caption = 'Elige ventana'
             if entry.get('terminal') and not entry['terminal'].get('live'):
                 caption = 'Reabrir CLI' if full else 'CLI cerrado'
-            entry['label'].configure(text='Sin conexion' if last_error else caption,
+            entry['paint'].configure('label', text='Sin conexion' if last_error else caption,
                 fg=entry['theme']['notice'] if last_error or unread else entry['theme']['foreground'])
+            entry['paint'].visible(True)
         position_group()
         sync_markers()
         if not avatars_hidden and not inbox.visible() and history_picker.window.state() == 'withdrawn' and tick_number % 2 == 0:
