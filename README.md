@@ -82,6 +82,12 @@ The history picker focuses search when opened. Use Down to select a result, Ente
 
 The history list is loaded only on request, in a short-lived background worker, with no recurring history scan. It reads up to 200 unarchived top-level Codex metadata rows and up to 200 recent main-session Claude files, inspecting at most 5,000 file entries per configuration root and only the first/last 64 KiB of each selected file. It excludes missing Codex logs, Claude records without usable session/workspace metadata, nested subagents, and ambiguous Claude UUIDs across roots. It does not retain conversation prose, tool output, or commands. Some Claude titles or records outside those bounded metadata samples may be unavailable. Already shown sessions are managed from **Avatares visibles** rather than duplicated in history. Visibility selections live in `visibility.json`; explicit historical identities/workspaces live in `shown-history.json`, both under the local runtime directory.
 
+## Observed session states
+
+The caption, details, group summary, inbox and input sounds share the same interpretation of explicit session evidence. A request for your response uses a speech bubble, a tool wait uses an hourglass, an interrupted turn uses a pause symbol, and unavailable activity uses a question mark. Completed turns say **Turno terminado**; completion does not certify the result or its validation. Compact companions use shorter versions of these labels.
+
+Agentlings never infers a need for human input from elapsed time. Missing or stale data does not become completion, interruption or a new request. A known closed terminal remains **CLI cerrado** and can be resumed. The `companions` section in `agentlings status` includes the interpreted `status` alongside the displayed sprite.
+
 ## Attention inbox
 
 Open **⋮ → Necesita tu atención…** to review explicit requests for input, observed tool errors, interrupted turns, and unread results in one list. The group ring remains amber while notices are pending, including hidden companions. Enter opens the selected available session; **Marcar visto** or Ctrl+Enter acknowledges an error, interruption, or result. Escape closes the inbox. Requests for input must be answered in their original terminal and cannot be dismissed as resolved here. An ordinary tool wait never becomes a request for human input.

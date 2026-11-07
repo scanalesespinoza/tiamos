@@ -16,6 +16,7 @@ from window_focus import Windows, WindowSnapshot, FULL_SIZE, HALF_SIZE, avatar_s
 from cli_sessions import registrations, create_session, launch, thread_info
 from avatar_layout import arrange, GlobalHotkeys, monitor_work_area, place_companion
 from session_activity import Activity, safe_preview
+from session_status import status_code
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
 from platform_runtime import VERSION, state_directory, lock_file, app_command, background_options, capabilities, open_text, discovery_enabled
 
@@ -837,7 +838,8 @@ def serve():
             now = time.monotonic()
             celebrating = now < entry['celebrate_until'] and not quiet.get() and not last_error
             visual = visual_state(entry['chat'], celebrating=celebrating,
-                greeting=now < entry['greet_until'] and not quiet.get(), carried=bool(entry['drag']) and not quiet.get())
+                greeting=now < entry['greet_until'] and not quiet.get(), carried=bool(entry['drag']) and not quiet.get(),
+                unavailable=bool(last_error))
             if visual != entry['visual'] or quiet.get() or last_error:
                 entry['frame'] = 0
             elif state == 'working' or tick_number % 2 == 0:
@@ -845,7 +847,7 @@ def serve():
             entry['visual'] = visual
             entry['paint'].configure('picture', image=animation(entry, visual)[0 if full else 1][entry['frame']])
             caption = compact_caption(entry['chat'], full)
-            if state != 'working' and unread:
+            if status_code(entry['chat']) in ('completed', 'resting') and unread:
                 caption = '¡Turno listo!' if celebrating else 'Resultado nuevo' if full else 'Nuevo'
             if pending and pending[0] == ident:
                 caption = 'Abriendo...'
@@ -894,7 +896,8 @@ def serve():
                 'theme_file': str(themes.path),
                 'companions': {ident: {'accent': v['accent'], 'accessory': v['accessory'],
                     'provider': v['chat'].get('provider', 'codex'), 'background': v['theme']['background'],
-                    'visual': v['visual'], 'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
+                    'visual': v['visual'], 'status': status_code(dict(v['chat'], unavailable=v.get('unavailable'))),
+                    'pending_result': notices.pending(ident)} for ident, v in widgets.items()},
                 'activity': {ident: {key: (v.get('chat', {}).get('activity') or {}).get(key)
                     for key in ('phase', 'started_at', 'finished_at', 'updated_at', 'action_count')} for ident, v in widgets.items()},
             })
