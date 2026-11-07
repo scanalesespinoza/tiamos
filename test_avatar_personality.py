@@ -1,6 +1,7 @@
 import copy
 import datetime as dt
 import unittest
+from PIL import Image, ImageChops, ImageColor
 
 from avatar_personality import COLORS, STATES, Notices, customize, identity, render_frames, visual_state
 from session_activity import Activity
@@ -111,7 +112,33 @@ class PersonalityTests(unittest.TestCase):
                     self.assertEqual(len(frames), 8)
                     self.assertTrue(all(frame.size == (160, 104) for frame in frames))
                     self.assertEqual(frames[0].resize((80, 52)).size, (80, 52))
-                    self.assertGreater(len(frames[0].getcolors()), 2)
+                    self.assertGreater(len(frames[0].getcolors(maxcolors=160 * 104)), 2)
+
+    def test_custom_backgrounds_remain_opaque_and_seamless_at_both_sizes(self):
+        for background in ('#24364b', '#493326', '#ffffff', '#000000'):
+            for state in STATES:
+                with self.subTest(background=background, state=state):
+                    for frame in render_frames(state, COLORS[0], background=background):
+                        self.assertEqual(frame.mode, 'RGB')
+                        for image in (frame, frame.resize((80, 52), Image.Resampling.LANCZOS)):
+                            for corner in ((0, 0), (image.width - 1, image.height - 1)):
+                                self.assertEqual(image.getpixel(corner), ImageColor.getrgb(background))
+
+    def test_accessories_stay_distinct_with_the_same_color_at_half_size(self):
+        for state in STATES:
+            silhouettes = [render_frames(state, COLORS[0], accessory)[0]
+                           .resize((80, 52), Image.Resampling.LANCZOS).tobytes()
+                           for accessory in range(4)]
+            self.assertEqual(len(set(silhouettes)), 4, state)
+
+    def test_blink_does_not_hide_the_face_used_by_quiet_mode(self):
+        for state in ('working', 'editing', 'reading', 'greeting'):
+            frames = render_frames(state, COLORS[0])
+            # The app freezes on frame zero in quiet mode. The blink belongs
+            # to the animated sequence, while the quiet face keeps open eyes.
+            open_face = frames[0].crop((54, 35, 108, 51))
+            blink_face = frames[6].crop((54, 35, 108, 51))
+            self.assertIsNotNone(ImageChops.difference(open_face, blink_face).getbbox())
 
 
 if __name__ == '__main__':

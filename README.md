@@ -124,6 +124,8 @@ Both providers share dragging, focus sizing, docking, hide/show, detail cards, q
 
 Each session keeps its own color and accessory across restarts. Companions read a book while exploring, type or hold a pencil while editing, show moving test lights during validation, and hold a wrench after an observed tool error. These gestures describe activity categories, not the agent's thoughts or proof that a task succeeded. A short wave acknowledges explicit terminal selection; dragging produces a small reaction inside the avatar without moving the window by itself.
 
+Companions have softly shaded shells, inset glass faces, subtle highlights, and smooth contours at both sizes. Brief blinks accompany active gestures; resting, waiting, and carried companions have distinct expressions. Artwork is drawn locally and cached, preserving custom backgrounds, the existing animation cadence, and quiet mode's still, open-eyed active face.
+
 An explicit wait on a tool shows an hourglass and **Esperando**. The session remains working; this does not imply that it needs user input or has stalled. Ordinary silence alone never triggers a waiting or error claim.
 
 Right-click and choose **Personalizar compañero** to select one of eight colors and four accessories for that session. Changes apply immediately at both sizes and persist across restarts. **Restablecer aspecto automático** returns to an automatically assigned available combination. Automatic assignment avoids occupied combinations while space remains; deliberate custom choices may match another session.
