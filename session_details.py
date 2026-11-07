@@ -5,6 +5,7 @@ from session_activity import safe_preview, time_text
 from session_metrics import profile_text
 from profile_charts import ProfileChart
 from session_status import status_code, status_label
+from session_verification import verification_text
 
 
 def card_position(anchor, size, area, gap=10, obstacles=(), preferred=None):
@@ -74,6 +75,9 @@ def details_text(chat, now=None):
         turn_label = 'el turno observado' if unavailable else 'este turno' if working else 'el último turno'
         action_label = 'acción observada' if count == 1 else 'acciones observadas'
         lines.append(f'{count} {action_label} en {turn_label}')
+    verification = activity.get('verification') or {}
+    check_at = verification.get('check_at')
+    check_text = verification_text(verification, time_text(max(0, now - check_at)) if check_at else '')
     actions = []
     for action in activity.get('actions', [])[:3]:
         mark = {'ok': '✓', 'error': '!', 'info': '·'}.get(action.get('outcome'), '·')
@@ -89,6 +93,7 @@ def details_text(chat, now=None):
     if started and activity.get('last_completed_at') and activity['last_completed_at'] < started:
         previous_result = activity.get('last_result') or 'El turno anterior terminó sin un resumen final disponible. Consulta la terminal.'
     return {'state': state, 'activity': '\n'.join(lines), 'actions': '\n'.join(actions),
+        'verification': check_text,
         'objective': activity.get('objective') or '', 'report': report or '', 'alert': alert,
         'previous_title': 'Resultado comunicado en el turno anterior' if previous_result else '',
         'previous_result': previous_result,
@@ -151,6 +156,7 @@ class DetailsCard:
             ('objective', '#e0e8f3', ('Segoe UI', 9)), ('activity_title', '#869bb2', ('Segoe UI', 8)),
             ('activity', '#c3d3e5', ('Segoe UI', 9)), ('alert', '#f0bd75', ('Segoe UI', 9)),
             ('actions', '#c3d3e5', ('Segoe UI', 9)),
+            ('verification', '#c3d3e5', ('Segoe UI', 9)),
             ('report_title', '#869bb2', ('Segoe UI', 8)), ('report', '#e0e8f3', ('Segoe UI', 9)),
             ('previous_title', '#869bb2', ('Segoe UI', 8)), ('previous_result', '#c3d3e5', ('Segoe UI', 9)),
             ('profile_level', '#77e4c8', ('Segoe UI Semibold', 10)),
@@ -161,6 +167,8 @@ class DetailsCard:
             widget = tk.Label(content, bg='#111925', fg=color, font=font, anchor='w',
                 justify='left', wraplength=350, borderwidth=0)
             self.labels[name] = widget
+            if name == 'profile_today':
+                self.chart_row = row
             widget.grid(row=row, column=0, sticky='ew', pady=(8 if name.endswith('_title') or name == 'title' else 3, 0))
         self.chart = ProfileChart(content)
         footer = tk.Frame(self.body, bg='#111925')
@@ -350,7 +358,7 @@ class DetailsCard:
         else:
             self.graph_button.pack_forget()
         if self.profile and self.graphical:
-            self.chart.canvas.grid(row=13, column=0, sticky='ew', pady=(3, 0))
+            self.chart.canvas.grid(row=self.chart_row, column=0, sticky='ew', pady=(3, 0))
             self.chart.update((chat.get('activity') or {}).get('stats'), entry.get('accent', '#77e4c8'))
         else:
             self.chart.canvas.grid_remove()
@@ -360,6 +368,9 @@ class DetailsCard:
         code = status_code(chat)
         self.labels['state'].configure(fg='#f0bd75' if code in ('unavailable', 'input', 'interrupted')
                                       else '#869bb2' if code == 'unknown' else '#77e4c8')
+        evidence = (chat.get('activity') or {}).get('verification') or {}
+        self.labels['verification'].configure(fg='#f0bd75' if evidence.get('edits_after_check')
+                                              or evidence.get('check_outcome') == 'error' else '#c3d3e5')
         self.labels['project'].configure(fg=entry.get('accent', '#77e4c8'))
         if signature != self.signature:
             self.signature = signature

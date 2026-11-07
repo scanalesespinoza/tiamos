@@ -68,6 +68,22 @@ class ProfileCardTests(unittest.TestCase):
         self.assertEqual(self.card.chart.redraws, redraws)
         self.assertLess(len(self.card.chart.canvas.find_all()), 50)
 
+    def test_verification_is_in_activity_and_profile_chart_keeps_its_own_row(self):
+        activity = self.entries['session']['chat']['activity']
+        activity['verification'] = {'check_at': 100, 'check_kind': 'Pruebas/validación',
+                                    'check_outcome': 'ok', 'edit_at': 101, 'edits_after_check': True}
+        self.card.refresh()
+        label = self.card.labels['verification']
+        self.assertEqual(label.winfo_manager(), 'grid')
+        self.assertIn('edición posteriores', label.cget('text'))
+        self.assertEqual(label.cget('fg'), '#f0bd75')
+        self.card.toggle_profile()
+        self.assertEqual(label.winfo_manager(), '')
+        self.assertNotEqual(self.card.chart.canvas.grid_info()['row'],
+                            self.card.labels['profile_level'].grid_info()['row'])
+        self.card.toggle_profile()
+        self.assertEqual(label.winfo_manager(), 'grid')
+
     def test_profile_only_does_not_acknowledge_an_unread_result(self):
         with patch.object(self.card, 'no_activate'), patch.object(self.card.window, 'deiconify'), \
              patch.object(self.card.window, 'lift'):

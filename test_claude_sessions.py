@@ -39,6 +39,8 @@ class ClaudeTests(unittest.TestCase):
         trace.observe(record('user', 102, message={'content': [
             {'type': 'tool_result', 'tool_use_id': 'tool-a', 'content': 'PRIVATE_TOOL_OUTPUT', 'is_error': True}]}))
         self.assertEqual(trace.activity.actions[0]['outcome'], 'error')
+        self.assertEqual(trace.activity.summary()['verification']['check_outcome'], 'error')
+        self.assertEqual(trace.activity.summary()['verification']['check_kind'], 'Pruebas/validación')
         self.assertEqual(trace.activity.objective, 'Improve the search control')
         trace.observe(record('assistant', 103, message={'content': [{'type': 'text', 'text': 'Reported result.'}], 'stop_reason': 'end_turn'}))
         self.assertFalse(trace.active)
