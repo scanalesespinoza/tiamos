@@ -28,7 +28,7 @@ class ActivityTests(unittest.TestCase):
         self.activity.observe({'type': 'response_item', 'payload': {'type': 'function_call',
             'name': 'functions.wait', 'arguments': '{"cell_id":"123"}'}}, self.now)
         self.assertIsNone(self.activity.finished_at)
-        self.assertEqual(compact_caption({'state': 'working', 'activity': self.activity.summary()}), 'Esperando')
+        self.assertEqual(compact_caption({'state': 'working', 'activity': self.activity.summary()}), 'Esperando herramienta')
         self.assertEqual(compact_caption({'state': 'sleeping', 'activity': self.activity.summary()}), 'En descanso')
 
     def test_objective_survives_continuation_and_instruction_context(self):
@@ -186,7 +186,7 @@ class ActivityTests(unittest.TestCase):
         self.assertIn('1 min 10 s', detail['activity'])
         self.assertIn('hace 5 min 30 s', detail['activity'])
         self.assertEqual(detail['report'], 'Validation passed')
-        self.assertEqual(compact_caption(chat), 'En descanso')
+        self.assertEqual(compact_caption(chat), 'Turno terminado')
         chat['state'] = 'working'
         chat['activity']['phase'] = 'Pruebas y validación'
         self.assertEqual(compact_caption(chat), 'Validando')

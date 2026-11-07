@@ -5,6 +5,7 @@ import os
 
 from session_activity import safe_preview
 from session_history import history_label
+from session_status import status_code
 
 MENU_SIZE = 36
 MENU_ID = '__group_menu__'
@@ -17,12 +18,13 @@ def team_status(entries, hidden=False, excluded=()):
         chat = entry.get('chat') or {}
         state = entry.get('state', chat.get('state'))
         activity = chat.get('activity') or {}
-        if entry.get('unavailable') or state not in ('working', 'sleeping'):
+        code = status_code(dict(chat, state=state, unavailable=entry.get('unavailable') or chat.get('unavailable')))
+        if code in ('unavailable', 'unknown'):
             counts['unknown'] += 1
-        elif state == 'working':
+        elif code in ('working', 'input', 'tool_wait'):
             counts['working'] += 1
             latest = (activity.get('actions') or [{}])[0]
-            if activity.get('phase') == 'Esperando intervención' or latest.get('outcome') == 'error':
+            if code == 'input' or latest.get('outcome') == 'error':
                 counts['attention'] += 1
         else:
             counts['resting'] += 1

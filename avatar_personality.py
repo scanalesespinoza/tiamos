@@ -3,11 +3,13 @@ import hashlib
 import math
 from PIL import Image, ImageDraw, ImageColor
 from avatar_theme import palettes
+from session_status import status_code
 
 COLORS = ('#77e4c8', '#80bfff', '#d3a0ff', '#ffc275', '#ff9bb6', '#c2dd7b', '#80dce8', '#dcb99b')
 COLOR_NAMES = ('Menta', 'Azul', 'Lila', 'Ámbar', 'Rosa', 'Lima', 'Turquesa', 'Arena')
 ACCESSORIES = ('Antena', 'Auriculares', 'Orejas', 'Gorra')
-STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'error', 'sleeping', 'celebrating', 'greeting', 'carried')
+STATES = ('working', 'reading', 'editing', 'testing', 'waiting', 'attention', 'paused', 'unknown',
+          'error', 'sleeping', 'celebrating', 'greeting', 'carried')
 
 
 def provider_theme(provider):
@@ -37,13 +39,18 @@ def customize(ident, registry, color=None, accessory=None, reset=False):
     return identity(ident, registry)
 
 
-def visual_state(chat, celebrating=False, greeting=False, carried=False):
+def visual_state(chat, celebrating=False, greeting=False, carried=False, unavailable=False):
     if carried:
         return 'carried'
     activity = chat.get('activity') or {}
-    if chat.get('state') == 'unknown':
-        return 'waiting'
-    if chat.get('state') != 'working':
+    code = status_code(chat)
+    if unavailable or code in ('unknown', 'unavailable'):
+        return 'unknown'
+    if code == 'input':
+        return 'attention'
+    if code == 'interrupted':
+        return 'paused'
+    if code in ('closed', 'completed', 'resting'):
         return 'celebrating' if celebrating else 'greeting' if greeting else 'sleeping'
     latest = (activity.get('actions') or [{}])[0]
     if latest.get('outcome') == 'error':
@@ -195,7 +202,7 @@ def render_frames(state, accent, accessory=0, background='#171d28'):
                 paint('rounded_rectangle', (x + 1 + shift, top + 20, x + 4 + shift, top + 24), radius=1, fill=accessory_light)
         if state in ('sleeping', 'carried'):
             paint('ellipse', (77, top + 36, 83, top + 42), outline=accent, width=1)
-        elif state in ('waiting', 'error'):
+        elif state in ('waiting', 'error', 'paused', 'unknown'):
             paint('line', (75, top + 39, 86, top + 39), fill=accent, width=2)
         else:
             paint('arc', (72, top + 32, 89, top + 42), 0, 180, fill=accent, width=2)
@@ -231,6 +238,25 @@ def render_frames(state, accent, accessory=0, background='#171d28'):
             paint('polygon', [(66 + step, 81 + step // 2), (94 - step, 81 + step // 2), (80, 88)], fill=accent)
             paint('polygon', [(65, 99), (95, 99), (80, 98 - step)], fill=accent)
             paint('point', (80, 90 + step % 3), fill=accent)
+        elif state == 'attention':
+            # A speech bubble is a request to a person; the hourglass remains
+            # reserved for a tool wait. Both are readable at half size.
+            paint('rounded_rectangle', (58, 77, 104, 98), radius=6, fill='#17283b', outline='#ffc275', width=2)
+            paint('polygon', [(65, 97), (65, 103), (74, 97)], fill='#ffc275')
+            paint('line', (81, 82, 81, 88), fill='#ffc275', width=3)
+            paint('ellipse', (79, 92, 83, 95), fill='#ffc275')
+            lift = step % 3
+            paint('line', (132, top + 40, 142, top + 24 - lift), fill=accent, width=3)
+            paint('ellipse', (138, top + 17 - lift, 146, top + 25 - lift), outline=accent, width=2)
+        elif state == 'paused':
+            paint('rounded_rectangle', (57, 78, 103, 102), radius=6, fill='#17283b', outline='#ffc275', width=2)
+            for left in (69, 84):
+                paint('rounded_rectangle', (left, 83, left + 6, 97), radius=2, fill='#ffc275')
+        elif state == 'unknown':
+            paint('rounded_rectangle', (57, 78, 103, 102), radius=6, fill='#17283b', outline='#869bb2', width=2)
+            paint('arc', (74, 82, 87, 91), 190, 450, fill='#c3d3e5', width=2)
+            paint('line', (80, 90, 80, 93), fill='#c3d3e5', width=2)
+            paint('ellipse', (79, 97, 81, 99), fill='#c3d3e5')
         elif state == 'error':
             paint('line', (56, top + 14, 69, top + 18), fill='#ffc275', width=2)
             paint('line', (126, 72, 140, 90), fill='#ffc275', width=5)

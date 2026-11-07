@@ -4,6 +4,7 @@ import os
 from session_activity import safe_preview, time_text
 from session_metrics import profile_text
 from profile_charts import ProfileChart
+from session_status import status_code, status_label
 
 
 def card_position(anchor, size, area, gap=10, obstacles=(), preferred=None):
@@ -36,17 +37,14 @@ def details_text(chat, now=None):
     terminal = chat.get('terminal') or {}
     unavailable = bool(chat.get('unavailable'))
     working = chat.get('state') == 'working'
-    state = 'Trabajando' if working else 'En descanso'
-    if chat.get('state') == 'unknown':
-        state = 'Estado de actividad no disponible'
-    if terminal and not terminal.get('live'):
-        state = 'CLI cerrado · doble clic para reanudar'
+    code = status_code(chat)
+    state = status_label(chat)
+    if code == 'closed':
+        state += ' · doble clic para reanudar'
     elif chat.get('minimized'):
         state += ' · terminal minimizada'
     started = activity.get('started_at')
     finished = activity.get('finished_at')
-    if not working and finished and terminal.get('live'):
-        state += ' · turno interrumpido' if activity.get('phase') == 'Turno interrumpido' else ' · turno terminado'
     if unavailable:
         state = 'Sin conexión · última información disponible'
     duration = ''
@@ -98,13 +96,10 @@ def details_text(chat, now=None):
 
 
 def compact_caption(chat, full=True):
-    if chat.get('state') == 'unknown':
-        return 'Sin estado'
-    if chat.get('state') != 'working':
-        return 'En descanso' if full else 'Zzz'
+    if status_code(chat) != 'working':
+        return status_label(chat, full)
     phase = (chat.get('activity') or {}).get('phase', '')
     for match, caption in [('Pruebas', 'Validando'), ('Edición', 'Editando'),
-        ('Esperando', 'Esperando'),
         ('Compilación', 'Compilando'), ('Investigación', 'Investigando'),
         ('Exploración', 'Explorando'), ('Git', 'Git'), ('Publicación', 'Publicando'),
         ('Revisión', 'Revisando'), ('Revisando', 'Revisando'), ('Inspección', 'Inspección')]:
@@ -362,7 +357,9 @@ class DetailsCard:
         self.profile_button.configure(text='Actividad' if self.profile else 'Perfil · XP')
         signature = tuple(fields.items())
         self.pin_button.configure(text='Fijada' if self.pinned else 'Fijar')
-        self.labels['state'].configure(fg='#f0bd75' if chat['unavailable'] else '#77e4c8')
+        code = status_code(chat)
+        self.labels['state'].configure(fg='#f0bd75' if code in ('unavailable', 'input', 'interrupted')
+                                      else '#869bb2' if code == 'unknown' else '#77e4c8')
         self.labels['project'].configure(fg=entry.get('accent', '#77e4c8'))
         if signature != self.signature:
             self.signature = signature

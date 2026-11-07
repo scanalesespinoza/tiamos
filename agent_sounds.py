@@ -115,19 +115,23 @@ class SoundEvents:
         self.sessions = {}
 
     def observe(self, chats, now):
+        from session_status import needs_input, status_code
         events = []
         present = set()
         for chat in chats:
             ident = chat['id']
             present.add(ident)
+            if status_code(chat) in ('unavailable', 'unknown'):
+                continue
             activity = chat.get('activity') or {}
             previous = self.sessions.get(ident)
             error = max((action.get('at', 0) or 0 for action in activity.get('actions', [])
                          if action.get('outcome') == 'error'), default=0)
+            error = max(error, activity.get('last_error_at') or 0)
             current = {'since': previous['since'] if previous else now,
                        'complete': max(activity.get('last_completed_at') or 0, previous['complete'] if previous else 0),
                        'error': max(error, previous['error'] if previous else 0),
-                       'attention': activity.get('phase') == 'Esperando intervención',
+                       'attention': needs_input(chat),
                        'level': max((activity.get('stats') or {}).get('level', 1), previous['level'] if previous else 1),
                        'updated': max(activity.get('updated_at') or 0, previous['updated'] if previous else 0),
                        'last_error_sound': previous['last_error_sound'] if previous else float('-inf')}

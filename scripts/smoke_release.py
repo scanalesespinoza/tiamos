@@ -53,6 +53,7 @@ def main():
             assert data['statistics'][ident]['level'] == 1
             assert data['sounds']['enabled'] and data['sounds']['volume'] == 25
             assert data['capabilities']['app'] == 'Agentlings'
+            assert data['companions'][ident]['status'] == 'completed'
             marker = data['starred'][ident]
             assert marker['visible'] and marker['symbol'] == 'star'
             gap = marker['position'][1] - data['windows'][ident][1] - data['sizes'][ident][1]
@@ -103,6 +104,7 @@ def main():
             owner = psutil.Process(data['pid'])
             assert not data['visible'][ident] and not data['starred'][ident]['visible']
             assert data['companions'][ident]['visual'] is None, 'Hidden companions must not render animations'
+            assert data['companions'][ident]['status'] == 'working', 'A resumed turn must not remain interrupted'
             previous_error = json.loads(metadata)['sessions'][ident]['error_at']
             stamp = dt.datetime.now(dt.timezone.utc)
             with trace.open('a', encoding='utf-8') as stream:

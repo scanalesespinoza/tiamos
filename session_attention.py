@@ -3,6 +3,7 @@ import math
 import re
 
 from session_activity import safe_preview, time_text
+from session_status import needs_input, status_code
 
 LIMIT = 128
 FIELDS = ('error_at', 'error_seen', 'interrupted_at', 'interrupted_seen')
@@ -15,12 +16,6 @@ def timestamp(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
         return float(value)
     return 0.0
-
-
-def needs_input(chat):
-    """Only explicit provider evidence means a person is needed."""
-    return (not chat.get('unavailable') and chat.get('state') == 'working'
-            and (chat.get('activity') or {}).get('phase') == 'Esperando intervención')
 
 
 class AttentionInbox:
@@ -50,7 +45,7 @@ class AttentionInbox:
         for chat in chats:
             ident = chat['id']
             present.add(ident)
-            if chat.get('unavailable') or chat.get('state') == 'unknown':
+            if status_code(chat) in ('unavailable', 'unknown'):
                 continue
             activity = chat.get('activity') or {}
             if needs_input(chat):
@@ -102,7 +97,7 @@ class AttentionInbox:
         def add(ident, kind, at):
             entry = entries.get(ident) or {}
             chat = entry.get('chat') or {}
-            stale = not available or entry.get('unavailable') or not chat or chat.get('state') == 'unknown'
+            stale = not available or entry.get('unavailable') or not chat or status_code(chat) in ('unavailable', 'unknown')
             provider = 'Claude' if chat.get('provider') == 'claude' or ident.startswith('claude:') else 'Codex'
             rows.append({'key': f'{kind}:{ident}:{at}', 'id': ident, 'kind': kind, 'at': at,
                          'session': provider + ' · ' + safe_preview(chat.get('title') or ident[-8:], 70),
