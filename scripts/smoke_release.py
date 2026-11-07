@@ -74,6 +74,7 @@ def main():
                     'id': 'failed-tool', 'type': 'CommandExecution', 'command': 'synthetic-check',
                     'exit_code': 1, 'aggregated_output': 'PRIVATE_SMOKE_OUTPUT'}},
                 {'type': 'turn_aborted', 'turn_id': 'attention'},
+                {'type': 'task_started', 'turn_id': 'after-interruption'},
             ]
             with trace.open('a', encoding='utf-8') as stream:
                 for payload in events:

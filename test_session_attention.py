@@ -1,7 +1,9 @@
 import json
+import datetime as dt
 import unittest
 
 from session_attention import AttentionInbox, LIMIT
+from session_activity import Activity
 
 
 def chat(ident='a', phase='Analizando', state='working', error=0, finished=0):
@@ -15,6 +17,25 @@ def entries(*chats):
 
 
 class AttentionTests(unittest.TestCase):
+    def test_fast_error_and_interruption_survive_action_eviction_and_next_turn(self):
+        activity = Activity()
+        inbox = AttentionInbox()
+        inbox.observe([chat()], 10)
+        def event(kind, stamp, turn='first'):
+            activity.observe({'type': 'event_msg', 'payload': {'type': kind, 'turn_id': turn}},
+                             dt.datetime.fromtimestamp(stamp, dt.timezone.utc))
+        event('task_started', 11)
+        activity.add_action('Tool', dt.datetime.fromtimestamp(12, dt.timezone.utc), 'error', 'failed')
+        for stamp in range(13, 20):
+            activity.add_action('Tool', dt.datetime.fromtimestamp(stamp, dt.timezone.utc), 'ok', str(stamp))
+        self.assertFalse(any(item['outcome'] == 'error' for item in activity.actions))
+        event('turn_aborted', 20)
+        event('task_started', 21, 'second')
+        current = dict(chat(), activity=activity.summary())
+        inbox.observe([current], 22)
+        self.assertEqual([(row['kind'], row['at']) for row in inbox.rows(entries(current), {}, 23)],
+                         [('interrupted', 20), ('error', 12)])
+
     def test_first_discovery_baselines_history_but_new_errors_survive_recovery_and_restart(self):
         inbox = AttentionInbox()
         inbox.observe([chat(error=10)], 20)

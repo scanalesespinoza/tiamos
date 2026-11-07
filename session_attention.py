@@ -59,7 +59,9 @@ class AttentionInbox:
                 self.input_since.pop(ident, None)
             error_at = max((timestamp(action.get('at')) for action in activity.get('actions', [])
                             if action.get('outcome') == 'error'), default=0)
+            error_at = max(error_at, timestamp(activity.get('last_error_at')))
             interrupted_at = timestamp(activity.get('finished_at')) if activity.get('phase') == 'Turno interrumpido' else 0
+            interrupted_at = max(interrupted_at, timestamp(activity.get('last_interrupted_at')))
             fresh = ident not in self.records
             record = self.records.setdefault(ident, dict.fromkeys(FIELDS, 0.0))
             for kind, stamp in (('error', error_at), ('interrupted', interrupted_at)):
