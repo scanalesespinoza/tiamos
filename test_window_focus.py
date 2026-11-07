@@ -1,8 +1,21 @@
 import unittest
-from window_focus import avatar_size, dock_position, foreground_selection
+from unittest.mock import Mock
+from window_focus import avatar_size, dock_position, foreground_selection, WindowSnapshot
 
 
 class FocusTests(unittest.TestCase):
+    def test_native_window_observation_is_shared_only_for_current_tick(self):
+        first, replacement = object(), object()
+        inspect = Mock(side_effect=[first, None, replacement])
+        tick = WindowSnapshot(inspect)
+        for _ in range(10):
+            self.assertIs(tick.inspect(123), first)
+            self.assertIsNone(tick.inspect(456))
+        self.assertEqual(inspect.call_count, 2)
+        next_tick = WindowSnapshot(inspect)
+        self.assertIs(next_tick.inspect(123), replacement)
+        self.assertEqual(inspect.call_count, 3)
+
     def test_selection_exchanges_full_and_half_dimensions(self):
         self.assertEqual(avatar_size('a', 'a'), (178, 152))
         self.assertEqual(avatar_size('b', 'a'), (89, 76))

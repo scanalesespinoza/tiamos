@@ -90,6 +90,10 @@ Errors and interruptions observed after initial discovery remain until acknowled
 
 The inbox creates its window only when opened, reuses the existing update loop, and does no rendering while hidden. It adds no transcript scan, background worker, polling timer, or dependency. A tool error is an observed event, not a declaration that the whole task failed; a completed turn still needs human review.
 
+Avatar painting applies only changed widget properties. Hidden companions keep observing their sessions and recording notices, but skip animation generation and painting. Quiet mode keeps a still frame without repeatedly resending it to Tk. Native window observations are shared only within one UI tick; opening a session always validates its window afresh.
+
+To compare desktop overhead locally, run `python scripts/benchmark_desktop.py --sessions 6 --seconds 10`, then repeat with `--quiet` and `--hidden`. The benchmark uses temporary synthetic sessions and its own isolated monitor. It reports CPU as a percentage of one core and peak sampled resident memory after warmup; use matching settings on the same machine. It does not scan operator sessions or apply a hardware-dependent CI threshold.
+
 ## Starred companions
 
 Right-click an avatar and open **Starred → Destacar avatar** to mark it with a star. Choose **Estrella**, **Círculo**, **Rombo**, **Triángulo**, **Cuadrado**, or **Hexágono** in that submenu to change the marker; choosing a symbol also enables it. Uncheck **Destacar avatar** to remove the marker while remembering the selected symbol. Choices are per session for both Codex and Claude and persist in `starred.json` under the runtime state directory.

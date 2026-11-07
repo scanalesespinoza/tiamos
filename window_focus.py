@@ -47,6 +47,18 @@ def foreground_selection(bindings, foreground, selected):
     return matches[0] if len(matches) == 1 else None
 
 
+class WindowSnapshot:
+    """Share native observations within one UI tick, never across user actions."""
+    def __init__(self, inspect):
+        self._inspect = inspect
+        self._windows = {}
+
+    def inspect(self, hwnd):
+        if hwnd not in self._windows:
+            self._windows[hwnd] = self._inspect(hwnd)
+        return self._windows[hwnd]
+
+
 class Windows:
     def __new__(cls):
         if os.name != 'nt':
