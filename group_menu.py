@@ -171,7 +171,7 @@ class HistoryPicker:
 class GroupMenu:
     def __init__(self, root, details, entries, hidden, individual_hidden, toggle_all, toggle_one, show_history, today_only,
                  sounds=None, quiet=lambda: False, *, show_all=None, set_quiet=None, place_group=None,
-                 shutdown=None, hotkeys=None):
+                 shutdown=None, hotkeys=None, show_attention=None, attention_count=lambda: 0):
         import tkinter as tk
         from session_details import DetailsCard
         self.details, self.entries = details, entries
@@ -179,6 +179,7 @@ class GroupMenu:
         self.toggle_all, self.toggle_one = toggle_all, toggle_one
         self.show_history, self.today_only = show_history, today_only
         self.show_all, self.set_quiet, self.quiet = show_all, set_quiet, quiet
+        self.show_attention, self.attention_count = show_attention, attention_count
         self.place_group, self.shutdown, self.hotkeys = place_group, shutdown, hotkeys or {}
         self.quiet_choice = tk.BooleanVar(master=root)
         self.summary, self.indicator_color = {}, None
@@ -211,7 +212,7 @@ class GroupMenu:
 
     def refresh_indicator(self):
         self.summary = team_status(self.entries, self.hidden(), self.individual_hidden())
-        color = '#f0bd75' if self.summary['attention'] else '#77e4c8' if self.summary['working'] else '#869bb2'
+        color = '#f0bd75' if self.summary['attention'] or self.attention_count() else '#77e4c8' if self.summary['working'] else '#869bb2'
         if color != self.indicator_color:
             self.canvas.itemconfigure(self.outline, outline=color)
             self.indicator_color = color
@@ -237,6 +238,8 @@ class GroupMenu:
         visible = f'{summary["visible"]} de {summary["total"]} visibles'
         self.menu.add_command(label=(f'{summary["attention"]} por revisar · ' if summary['attention'] else '') + visible, state='disabled')
         self.menu.add_separator()
+        if self.show_attention:
+            self.menu.add_command(label=f'Necesita tu atención… ({self.attention_count()})', command=self.show_attention)
         self.menu.add_command(label='Mostrar avatares' if self.hidden() else 'Ocultar avatares', command=self.toggle_all,
                               accelerator=self.hotkeys.get('toggle_visibility', ''), state='normal' if self.entries else 'disabled')
         if self.show_all:

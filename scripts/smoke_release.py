@@ -67,8 +67,40 @@ def main():
                 alias_command = [os.environ.get('COMSPEC', 'cmd.exe'), '/d', '/c', *alias_command]
             reply = subprocess.run(alias_command, env=env, capture_output=True, text=True, timeout=15, check=True)
             assert json.loads(reply.stdout)['pid'] == pid, 'Legacy alias uses a different monitor'
+            assert data['attention']['pending'] == 1, 'Expected an unread historical result'
+            events = [
+                {'type': 'task_started', 'turn_id': 'attention'},
+                {'type': 'item_completed', 'turn_id': 'attention', 'item': {
+                    'id': 'failed-tool', 'type': 'CommandExecution', 'command': 'synthetic-check',
+                    'exit_code': 1, 'aggregated_output': 'PRIVATE_SMOKE_OUTPUT'}},
+                {'type': 'turn_aborted', 'turn_id': 'attention'},
+            ]
+            with trace.open('a', encoding='utf-8') as stream:
+                for payload in events:
+                    stream.write(json.dumps({'timestamp': dt.datetime.now(dt.timezone.utc).isoformat(),
+                                             'type': 'event_msg', 'payload': payload}) + '\n')
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                data = status()
+                if data.get('attention', {}).get('pending') == 3:
+                    break
+                time.sleep(.25)
+            assert data.get('attention', {}).get('pending') == 3, 'New error and interruption must remain visible'
+            metadata = (state / 'attention.json').read_text(encoding='utf-8')
+            assert 'PRIVATE_SMOKE_OUTPUT' not in metadata and 'synthetic-check' not in metadata
+            run('off')
+            owner.wait(timeout=10)
+            run('on')
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                data = status()
+                if data.get('running') and data.get('attention', {}).get('pending') == 3:
+                    break
+                time.sleep(.25)
+            assert data.get('attention', {}).get('pending') == 3, 'Unseen events must survive restart'
+            owner = psutil.Process(data['pid'])
             print(json.dumps({'platform':sys.platform,'avatar':True,'menu':True,'xp':True,
-                              'single_instance':True,'legacy_alias':True}))
+                              'single_instance':True,'legacy_alias':True,'attention_restart':True}))
         finally:
             try:
                 run('off')

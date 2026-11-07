@@ -82,6 +82,14 @@ The history picker focuses search when opened. Use Down to select a result, Ente
 
 The history list is loaded only on request, in a short-lived background worker, with no recurring history scan. It reads up to 200 unarchived top-level Codex metadata rows and up to 200 recent main-session Claude files, inspecting at most 5,000 file entries per configuration root and only the first/last 64 KiB of each selected file. It excludes missing Codex logs, Claude records without usable session/workspace metadata, nested subagents, and ambiguous Claude UUIDs across roots. It does not retain conversation prose, tool output, or commands. Some Claude titles or records outside those bounded metadata samples may be unavailable. Already shown sessions are managed from **Avatares visibles** rather than duplicated in history. Visibility selections live in `visibility.json`; explicit historical identities/workspaces live in `shown-history.json`, both under the local runtime directory.
 
+## Attention inbox
+
+Open **⋮ → Necesita tu atención…** to review explicit requests for input, observed tool errors, interrupted turns, and unread results in one list. The group ring remains amber while notices are pending, including hidden companions. Enter opens the selected available session; **Marcar visto** or Ctrl+Enter acknowledges an error, interruption, or result. Escape closes the inbox. Requests for input must be answered in their original terminal and cannot be dismissed as resolved here. An ordinary tool wait never becomes a request for human input.
+
+Errors and interruptions observed after initial discovery remain until acknowledged, even after recovery or a monitor restart. First discovery establishes a baseline for historical errors and interruptions. The latest event of each kind is retained for up to 128 sessions; timestamps and acknowledgment watermarks are saved in `attention.json`, without titles, commands, paths, or conversation text. Result notices use the existing acknowledgment behavior and are listed for currently shown sessions. Unavailable sessions are marked as stale and cannot be opened from an old inbox row.
+
+The inbox creates its window only when opened, reuses the existing update loop, and does no rendering while hidden. It adds no transcript scan, background worker, polling timer, or dependency. A tool error is an observed event, not a declaration that the whole task failed; a completed turn still needs human review.
+
 ## Starred companions
 
 Right-click an avatar and open **Starred → Destacar avatar** to mark it with a star. Choose **Estrella**, **Círculo**, **Rombo**, **Triángulo**, **Cuadrado**, or **Hexágono** in that submenu to change the marker; choosing a symbol also enables it. Uncheck **Destacar avatar** to remove the marker while remembering the selected symbol. Choices are per session for both Codex and Claude and persist in `starred.json` under the runtime state directory.
