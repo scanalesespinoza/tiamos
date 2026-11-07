@@ -18,7 +18,7 @@ jobs:
           - os: ubuntu-22.04
             target: linux-x64
             executable: agentlings
-          - os: macos-14
+          - os: macos-15
             target: macos-arm64
             executable: agentlings
           - os: macos-15-intel
