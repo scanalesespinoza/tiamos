@@ -37,6 +37,15 @@ class GroupMenuTests(unittest.TestCase):
     def tearDown(self):
         self.root.destroy()
 
+    def test_attention_is_accessible_without_visible_avatars(self):
+        show = Mock()
+        menu = GroupMenu(self.root, Mock(), {}, lambda: True, set, Mock(), Mock(), Mock(), Mock(),
+                         show_attention=show, attention_count=lambda: 2)
+        menu.popup(Mock(x_root=100, y_root=100))
+        menu.menu.invoke(menu_index(menu.menu, 'Necesita tu atención… (2)'))
+        show.assert_called_once_with()
+        self.assertEqual(menu.indicator_color, '#f0bd75')
+
     def test_visibility_labels_and_individual_controls_remain_accessible(self):
         hidden = [False]
         excluded = set()

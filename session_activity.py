@@ -91,6 +91,8 @@ class Activity:
         self.count = 0
         self.turn_id = None
         self.last_completed_at = None
+        self.last_error_at = None
+        self.last_interrupted_at = None
         self.last_completion_error = False
         self.last_result = ''
         self.metrics = SessionMetrics()
@@ -101,6 +103,8 @@ class Activity:
         if ident:
             self.seen.append(ident)
         self.actions.appendleft({'label': label, 'at': stamp.timestamp(), 'outcome': outcome})
+        if outcome == 'error':
+            self.last_error_at = max(self.last_error_at or 0, stamp.timestamp())
         self.count += 1
         self.metrics.action(label, outcome, stamp)
         self.updated_at = stamp.timestamp()
@@ -130,6 +134,8 @@ class Activity:
                 self.metrics.finish(stamp, event in {'task_complete', 'task_completed'}, turn)
                 self.finished_at = stamp.timestamp()
                 self.phase = 'Turno finalizado' if event in {'task_complete', 'task_completed'} else 'Turno interrumpido'
+                if self.phase == 'Turno interrumpido':
+                    self.last_interrupted_at = max(self.last_interrupted_at or 0, self.finished_at)
                 if self.phase == 'Turno finalizado':
                     self.last_completed_at = self.finished_at
                     self.last_completion_error = bool(self.actions and self.actions[0]['outcome'] == 'error')
@@ -192,5 +198,6 @@ class Activity:
         return {'objective': self.objective, 'progress': self.progress, 'final': self.final,
             'phase': self.phase, 'started_at': self.started_at, 'finished_at': self.finished_at,
             'last_completed_at': self.last_completed_at, 'last_completion_error': self.last_completion_error,
+            'last_error_at': self.last_error_at, 'last_interrupted_at': self.last_interrupted_at,
             'last_result': self.last_result, 'stats': self.metrics.summary(),
             'updated_at': self.updated_at, 'action_count': self.count, 'actions': list(self.actions)}

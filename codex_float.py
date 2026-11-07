@@ -205,6 +205,8 @@ def serve():
     from session_details import DetailsCard, compact_caption
     from avatar_personality import ACCESSORIES, COLORS, COLOR_NAMES, Notices, customize, identity, render_frames, visual_state
     from agent_sounds import Sounds, SoundEvents, SoundMenu
+    from session_attention import AttentionInbox
+    from attention_inbox import AttentionWindow
     from PIL import Image, ImageTk
     import ctypes
     # Keep Tk window coordinates aligned with physical pixels on scaled displays.
@@ -219,6 +221,7 @@ def serve():
     root.title('Agentlings')
     identities = load_json(STATE / 'identities.json', {})
     notices = Notices(load_json(STATE / 'notices.json', {}))
+    attention = AttentionInbox(load_json(STATE / 'attention.json', {}))
     quiet = tk.BooleanVar(value=load_json(STATE / 'preferences.json', {}).get('quiet', False))
     sounds = Sounds(STATE)
     sound_events = SoundEvents()
@@ -451,6 +454,19 @@ def serve():
 
     details = DetailsCard(root, widgets, open_chat, on_view=acknowledge)
 
+    def attention_rows():
+        return attention.rows(widgets, notices.records, time.time(), available=not last_error)
+
+    def acknowledge_attention(row):
+        if row['kind'] == 'result':
+            record = notices.records.get(row['id']) or {}
+            if record.get('completed_at') == row['at']:
+                acknowledge(row['id'])
+        elif attention.acknowledge(row['id'], row['kind'], row['at']):
+            atomic_json(STATE / 'attention.json', attention.snapshot())
+
+    inbox = AttentionWindow(root, attention_rows, open_chat, acknowledge_attention, details.hide)
+
     def show_historical(record):
         from session_history import history_pin
         shown_history[record['id']] = history_pin(record)
@@ -476,7 +492,8 @@ def serve():
     group_menu = GroupMenu(root, details, widgets, lambda: avatars_hidden, lambda: hidden_ids,
                            toggle_visibility, toggle_one, history_picker.show, today_only, sounds, quiet.get,
                            show_all=show_all, set_quiet=set_quiet, place_group=apply_layout,
-                           shutdown=lambda: quit_all(), hotkeys=hotkeys.labels)
+                           shutdown=lambda: quit_all(), hotkeys=hotkeys.labels,
+                           show_attention=inbox.show, attention_count=lambda: attention.count(widgets, notices.records))
     position_group()
 
     def worker():
@@ -678,6 +695,8 @@ def serve():
             chats, error = updates.get_nowait()
             last_error = error
             if chats is not None:
+                if attention.observe(chats, time.time()):
+                    atomic_json(STATE / 'attention.json', attention.snapshot())
                 sound_event = sound_events.observe(chats, time.time())
                 if sound_event and not quiet.get() and not error:
                     sounds.play(sound_event)
@@ -842,10 +861,11 @@ def serve():
                 fg=entry['theme']['notice'] if last_error or unread else entry['theme']['foreground'])
         position_group()
         sync_markers()
-        if not avatars_hidden and history_picker.window.state() == 'withdrawn' and tick_number % 2 == 0:
+        if not avatars_hidden and not inbox.visible() and history_picker.window.state() == 'withdrawn' and tick_number % 2 == 0:
             details.reconcile_pointer()
         if tick_number % 10 == 0:
             details.refresh()
+            inbox.refresh()
             group_menu.refresh_indicator()
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
@@ -862,6 +882,7 @@ def serve():
                 'minimized': {ident: v.get('minimized', False) for ident, v in widgets.items()},
                 'windows': {ident: [v['window'].winfo_x(), v['window'].winfo_y()] for ident, v in widgets.items()},
                 'details': {'session': details.ident, 'pinned': details.pinned, 'profile': details.profile},
+                'attention': {'pending': attention.count(widgets, notices.records), 'visible': inbox.visible()},
                 'quiet': quiet.get(),
                 'sounds': dict(sounds.status(), paused_by_quiet=quiet.get()),
                 'hidden': avatars_hidden,
