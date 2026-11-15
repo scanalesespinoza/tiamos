@@ -25,6 +25,8 @@ def main():
         alias.symlink_to('agentlings')
     shutil.copy2(ROOT / 'README.md', output)
     shutil.copy2(ROOT / 'RELEASES.md', output)
+    if sys.platform == 'linux':
+        shutil.copytree(ROOT / 'linux', output / 'linux', dirs_exist_ok=True)
     arch = platform.machine().lower()
     arch = {'amd64': 'x64', 'x86_64': 'x64', 'aarch64': 'arm64'}.get(arch, arch)
     system = {'win32': 'windows', 'darwin': 'macos'}.get(sys.platform, 'linux')

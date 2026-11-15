@@ -48,7 +48,9 @@ jobs:
       - name: Packaged desktop smoke (Windows/macOS)
         if: runner.os != 'Linux'
         run: python scripts/smoke_release.py dist/agentlings/${{ matrix.executable }}
-      - uses: actions/upload-artifact@v4
+      - name: Retain downloadable release packages
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.target }}
           path: release/*

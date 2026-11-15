@@ -3,6 +3,7 @@ import queue
 import threading
 import os
 
+from avatar_layout import PLACEMENTS
 from session_activity import safe_preview
 from session_history import history_label
 from session_status import status_code
@@ -255,9 +256,13 @@ class GroupMenu:
             self.avatar_menu.add_checkbutton(label=label, variable=variable, command=lambda key=ident: self.toggle_one(key))
         self.menu.add_cascade(label='Avatares visibles', menu=self.avatar_menu, state='normal' if self.entries else 'disabled')
         if self.place_group:
-            for anchor, label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
+            for anchor, label in PLACEMENTS:
                 self.placement_menu.add_command(label=label, accelerator=self.hotkeys.get(anchor, ''),
                                                command=lambda mode=anchor: self.place_group(mode))
+            for action, label in [('cycle_next', 'Siguiente ubicación'), ('cycle_previous', 'Ubicación anterior')]:
+                if action in self.hotkeys:
+                    self.placement_menu.add_command(label=label, accelerator=self.hotkeys[action],
+                        command=lambda mode=action: self.place_group(mode))
             self.menu.add_cascade(label='Ubicación', menu=self.placement_menu)
         if self.set_quiet:
             self.quiet_choice.set(self.quiet())

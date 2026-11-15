@@ -1,10 +1,21 @@
-"""Group placement and collision-aware registration of Windows hotkeys."""
+"""Group placement and collision-aware native desktop shortcuts."""
 import ctypes as C
 from ctypes import wintypes as W
 import queue
 import threading
 import os
+import sys
 from itertools import chain
+
+
+PLACEMENT_CYCLE = ('top', 'left', 'bottom', 'right')
+PLACEMENTS = [('top', 'Arriba centro'), ('left', 'Izquierda centro'),
+              ('bottom', 'Abajo centro'), ('right', 'Derecha centro')]
+
+
+def cycle_position(current, direction):
+    index = PLACEMENT_CYCLE.index(current) if current in PLACEMENT_CYCLE else 0
+    return PLACEMENT_CYCLE[(index + direction) % len(PLACEMENT_CYCLE)]
 
 
 class _MonitorInfo(C.Structure):
@@ -24,7 +35,7 @@ def place_companion(entry, x, y):
 def arrange(items, area, anchor='top', margin=12, gap=12):
     """Pack variable-size companions into centered rows or edge columns."""
     left, top, right, bottom = area
-    horizontal = anchor == 'top'
+    horizontal = anchor in ('top', 'bottom')
     available = (right - left if horizontal else bottom - top) - 2 * margin
     lines = []
     current = []
@@ -39,17 +50,17 @@ def arrange(items, area, anchor='top', margin=12, gap=12):
     if current:
         lines.append(current)
     positions = {}
-    cross = top + margin if horizontal else right - margin if anchor == 'right' else left + margin
+    cross = bottom - margin if anchor == 'bottom' else top + margin if horizontal else right - margin if anchor == 'right' else left + margin
     for line in lines:
         length = sum(item[1 if horizontal else 2] for item in line) + gap * (len(line) - 1)
         along = (left + (right - left - length) // 2) if horizontal else (top + (bottom - top - length) // 2)
         thickness = max(item[2 if horizontal else 1] for item in line)
         for ident, width, height in line:
             x = along if horizontal else cross - width if anchor == 'right' else cross
-            y = cross if horizontal else along
+            y = cross - height if anchor == 'bottom' else cross if horizontal else along
             positions[ident] = (x, y)
             along += (width if horizontal else height) + gap
-        cross += thickness + gap if horizontal or anchor == 'left' else -(thickness + gap)
+        cross += thickness + gap if anchor in ('top', 'left') else -(thickness + gap)
     return positions
 
 
@@ -60,7 +71,7 @@ def menu_after(rectangles, area, anchor='top', size=36, gap=12):
     """Attach the control to a manually placed group without covering a companion."""
     left, top, right, bottom = area
     x, y, width, height = rectangles[-1]
-    trailing = (x + width + gap, y) if anchor == 'top' else (x + width - size if anchor == 'right' else x, y + height + gap)
+    trailing = (x + width + gap, y + height - size if anchor == 'bottom' else y) if anchor in ('top', 'bottom') else (x + width - size if anchor == 'right' else x, y + height + gap)
     candidates = [trailing, (x - size - gap, y), (x, y - size - gap), (x + width + gap, y)]
     candidates = chain(candidates, ((cx, cy) for cy in range(top + gap, bottom - size, size + gap)
                                    for cx in range(left + gap, right - size, size + gap)))
@@ -89,6 +100,9 @@ def register_available(register, unregister):
 
 class GlobalHotkeys:
     def __new__(cls):
+        if sys.platform == 'linux':
+            from linux_desktop import LinuxHotkeys
+            return LinuxHotkeys()
         if os.name != 'nt':
             from platform_runtime import PortableHotkeys
             return PortableHotkeys()
@@ -138,6 +152,11 @@ class GlobalHotkeys:
 
 
 def monitor_work_area(position=None):
+    if sys.platform == 'linux':
+        from linux_desktop import work_area
+        area = work_area(position)
+        if area:
+            return area
     if os.name != 'nt':
         import tkinter as tk
         root = tk._default_root

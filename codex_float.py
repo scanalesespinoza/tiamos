@@ -14,7 +14,7 @@ import threading
 import time
 from window_focus import Windows, WindowSnapshot, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
-from avatar_layout import arrange, GlobalHotkeys, monitor_work_area, place_companion
+from avatar_layout import PLACEMENTS, cycle_position, arrange, GlobalHotkeys, monitor_work_area, place_companion
 from session_activity import Activity, safe_preview
 from session_status import status_code
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
@@ -44,57 +44,7 @@ def running():
     return status if time.time() - status.get('heartbeat', 0) < 8 else None
 
 
-class Trace:
-    """Incrementally inspect lifecycle and bounded, sanitized activity metadata."""
-    END_EVENTS = {'task_complete', 'task_completed', 'turn_aborted', 'task_aborted', 'task_interrupted', 'turn_cancelled', 'session_end'}
-
-    def __init__(self, path):
-        self.path = Path(path)
-        self.offset = 0
-        self.pending = b''
-        self.active = set()
-        self.last_activity = None
-        self.activity = Activity()
-
-    def read(self):
-        if self.path.stat().st_size < self.offset:
-            self.offset, self.pending = 0, b''
-            self.active.clear()
-            self.last_activity = None
-            self.activity = Activity()
-        with self.path.open('rb') as stream:
-            stream.seek(self.offset)
-            content = self.pending + stream.read()
-            self.offset = stream.tell()
-        lines = content.split(b'\n')
-        self.pending = lines.pop()
-        for line in lines:
-            try:
-                item = json.loads(line)
-            except (ValueError, UnicodeDecodeError):
-                continue
-            if not isinstance(item, dict) or not isinstance(item.get('payload'), dict):
-                continue
-            payload = item.get('payload', {})
-            kind = payload.get('type')
-            try:
-                stamp = dt.datetime.fromisoformat(item['timestamp'].replace('Z', '+00:00')).astimezone()
-            except (KeyError, ValueError, TypeError, AttributeError):
-                continue
-            self.activity.observe(item, stamp)
-            if item.get('type') != 'event_msg' or kind not in {'task_started', 'user_message'} | self.END_EVENTS:
-                continue
-            if self.last_activity is None or stamp > self.last_activity:
-                self.last_activity = stamp
-            turn = payload.get('turn_id') or payload.get('task_id')
-            if kind == 'task_started':
-                self.active.add(turn or 'current')
-            elif kind in self.END_EVENTS:
-                if turn:
-                    self.active.discard(turn)
-                    self.active.discard('current')
-                else:
-                    self.active.clear()
+from session_trace import Trace
 
 
 class Reader:
@@ -105,6 +55,10 @@ class Reader:
         self.registration_loader = registration_loader
         self.discovery = None
         self.claude = None
+        self.elevated = None
+        if sys.platform == 'linux' and cli_only and discover and os.environ.get('AGENTLINGS_DISABLE_ELEVATED_OBSERVER') != '1':
+            from elevated_sessions import ElevatedSessions
+            self.elevated = ElevatedSessions()
         self.included_loader = included_loader or (lambda: {})
         if discover:
             from terminal_discovery import TerminalDiscovery
@@ -197,6 +151,8 @@ class Reader:
         self.traces = {key: trace for key, trace in self.traces.items() if key in seen}
         if self.claude:
             result.extend(self.claude.snapshot(terminals))
+        if self.elevated:
+            result.extend(self.elevated.snapshot())
         return result
 
 
@@ -283,7 +239,7 @@ def serve():
     selection_epoch = 0
     layout_path = STATE / 'layout.json'
     layout = load_json(layout_path, {'mode': 'top', 'manual': [], 'order': []})
-    if layout.get('mode') not in ('top', 'right', 'left'):
+    if layout.get('mode') not in dict(PLACEMENTS):
         layout['mode'] = 'top'
     manual_ids = set(layout.get('manual', []))
     layout_order = list(layout.get('order', []))
@@ -331,6 +287,8 @@ def serve():
     def apply_layout(anchor):
         nonlocal layout_area, follow_selection
         details.hide()
+        if anchor in ('cycle_next', 'cycle_previous'):
+            anchor = cycle_position(layout['mode'], 1 if anchor == 'cycle_next' else -1)
         layout['mode'] = anchor
         layout_area = monitor_work_area()
         follow_selection = False
@@ -403,9 +361,12 @@ def serve():
                 return window
         return None
 
-    def associate(ident, window, manual=False):
+    def associate(ident, window, manual=False, tab_id=None):
         nonlocal selected, focus_error, selection_epoch, follow_selection
         bindings[ident] = {'hwnd': window.hwnd, 'pid': window.pid, 'executable': window.executable, 'manual': manual}
+        if sys.platform == 'linux' and manual:
+            from linux_tabs import selected_tab
+            bindings[ident]['tab_id'] = tab_id or selected_tab(window)
         atomic_json(bindings_path, bindings)
         selected = ident
         selection_epoch = time.time()
@@ -424,18 +385,21 @@ def serve():
         terminal = entry.get('terminal') or {}
         if target and (bindings.get(ident, {}).get('manual') or terminal.get('live')):
             if not native.activate(target):
-                focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
+                focus_error = 'El escritorio no permitió activar la terminal. Selecciónala y vuelve a intentar.'
                 return 'break'
-            if terminal.get('kind') == 'tab':
+            manual_tab = bindings.get(ident, {}).get('tab_id')
+            if terminal.get('kind') == 'tab' or manual_tab:
                 from terminal_discovery import select_tab
                 try:
-                    select_tab(terminal)
+                    select_tab(dict(terminal, hwnd=target.hwnd, window_pid=target.pid, tab_id=manual_tab) if manual_tab else terminal)
                 except RuntimeError as error:
                     focus_error = str(error)
                     return 'break'
-            associate(ident, target, manual=bindings.get(ident, {}).get('manual', False))
+            associate(ident, target, manual=bindings.get(ident, {}).get('manual', False), tab_id=manual_tab)
             return 'break'
         try:
+            if terminal.get('elevated'):
+                raise RuntimeError('Este agente sigue abierto con permisos elevados. Selecciona su pestaña en la terminal; Agentlings no abre otra sesión administrativa.')
             if entry['chat'].get('provider') == 'claude':
                 from claude_sessions import launch_claude
                 launch_claude(entry['chat'])
@@ -645,8 +609,11 @@ def serve():
         appearance_menu.add_separator()
         appearance_menu.add_command(label='Restablecer aspecto automático', command=lambda: change_appearance(reset=True))
         menu.add_cascade(label='Personalizar compañero', menu=appearance_menu)
-        for anchor, placement_label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
+        for anchor, placement_label in PLACEMENTS:
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
+        for action, text in [('cycle_next', 'Siguiente ubicación'), ('cycle_previous', 'Ubicación anterior')]:
+            if action in hotkeys.labels:
+                menu.add_command(label=text, accelerator=hotkeys.labels[action], command=lambda mode=action: apply_layout(mode))
         menu.add_separator()
         menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
         sound_menu = SoundMenu(menu, sounds, quiet.get)
@@ -677,6 +644,8 @@ def serve():
 
     def tick():
         nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
+        if hasattr(hotkeys, 'poll'):
+            hotkeys.poll()
         observed_windows = WindowSnapshot(native.inspect)
         history_picker.poll()
         if tick_number % 10 == 0:
@@ -730,7 +699,7 @@ def serve():
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
                     host = observed_windows.inspect(terminal.get('hwnd')) if terminal.get('live') else None
-                    if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or terminal.get('token') in host.title):
+                    if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or (terminal.get('token') and terminal['token'] in host.title)) and (sys.platform != 'linux' or not bindings.get(chat['id'], {}).get('manual')):
                         binding = {'hwnd': host.hwnd, 'pid': host.pid, 'executable': host.executable, 'manual': False}
                         if bindings.get(chat['id']) != binding:
                             bindings[chat['id']] = binding
@@ -758,7 +727,7 @@ def serve():
                 if native.activate(target):
                     associate(ident, target)
                 else:
-                    focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
+                    focus_error = 'El escritorio no permitió activar la terminal. Selecciónala y vuelve a intentar.'
                 pending = None
         valid_bindings = {}
         for ident, entry in widgets.items():
@@ -766,7 +735,12 @@ def serve():
             if not host or not host.visible or host.minimized:
                 continue
             terminal = entry.get('terminal') or {}
-            if terminal.get('kind') == 'tab':
+            tab_id = bindings.get(ident, {}).get('tab_id') or terminal.get('tab_id')
+            if sys.platform == 'linux' and tab_id:
+                from linux_tabs import tab_selected
+                if tab_selected(host, tab_id):
+                    valid_bindings[ident] = host.hwnd
+            elif terminal.get('kind') == 'tab':
                 # Do not highlight a CLI from an inactive tab of this window.
                 fresh = terminal.get('heartbeat', 0) >= selection_epoch
                 if (fresh and terminal.get('selected')) or (not fresh and ident == selected):
@@ -869,7 +843,8 @@ def serve():
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
-                'capabilities': capabilities(),
+                'capabilities': capabilities(native, hotkeys),
+                'elevated_observer': reader.elevated.status if reader.elevated else None,
                 'chats': len(widgets),
                 'working': sum(v['state'] == 'working' for v in widgets.values()),
                 'error': last_error, 'focus_error': focus_error, 'selected': selected,

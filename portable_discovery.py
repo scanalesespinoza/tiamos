@@ -51,10 +51,21 @@ def native_clients():
                 pass
             result.append({'pid': process.pid, 'cwd': process.cwd(), 'provider': provider,
                            'created_at': process.create_time(), 'session_id': ident,
-                           'config_dir': config_dir, 'terminal_id': process.terminal()})
+                           'config_dir': config_dir, 'terminal_id': process.terminal(),
+                           'terminal_pid': terminal_ancestor(process)})
         except (psutil.Error, OSError):
             continue
     return result
+
+
+def terminal_ancestor(process):
+    try:
+        for ancestor in process.parents()[:32]:
+            if ancestor.name() in {'gnome-terminal-server', 'gnome-terminal-', 'konsole', 'xterm', 'kitty', 'ptyxis', 'kgx', 'xfce4-terminal'}:
+                return ancestor.pid
+    except psutil.Error:
+        pass
+    return None
 
 
 def match_client(thread, clients, threads):
@@ -81,6 +92,9 @@ class PortableDiscovery:
         from terminal_discovery import keep_daily_sessions
         clients = native_clients() if clients is None else clients
         current = {}
+        from window_focus import Windows
+        from linux_tabs import match_terminal
+        windows = Windows().all_terminal_windows()
         for thread in threads:
             if not thread.get('recent', True):
                 continue
@@ -89,6 +103,8 @@ class PortableDiscovery:
                 current[thread['id']] = {'id': thread['id'], 'kind': 'unbound', 'live': True,
                     'running': True, 'selected': False, 'cli_pid': client['pid'], 'created_at': client['created_at'],
                     'started_at': time.time(), 'heartbeat': time.time()}
+                unique = bool(client.get('terminal_pid')) and sum(c.get('terminal_pid') == client['terminal_pid'] for c in clients) == 1
+                current[thread['id']].update(match_terminal(thread, dict(client, terminal_unique=unique), windows))
         previous = read(self.state / 'external-cli.json', {}).get('sessions', {})
         current = keep_daily_sessions(current, previous, {client['pid'] for client in clients})
         births = {client['pid']: client['created_at'] for client in clients}

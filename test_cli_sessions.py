@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import time
 import os
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,21 @@ from test_reader import event
 
 
 class CliTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux terminal focus')
+    def test_linux_live_session_selects_tab_without_launching_duplicate(self):
+        ident = '11111111-1111-1111-1111-111111111111'
+        record = {'live': True, 'kind': 'tab', 'hwnd': 5, 'window_pid': 10, 'tab_id': 'stable-tab'}
+        with patch('cli_sessions.thread_info', return_value={}), \
+             patch('cli_sessions.registrations', return_value={ident: record}), \
+             patch('terminal_discovery.select_tab') as select, patch('cli_sessions.subprocess.Popen') as spawn:
+            self.assertEqual(launch(ident), ident)
+            select.assert_called_once_with(record)
+            spawn.assert_not_called()
+            select.side_effect = RuntimeError('Original tab closed')
+            with self.assertRaisesRegex(RuntimeError, 'Original tab closed'):
+                launch(ident)
+            spawn.assert_not_called()
+
     def test_registration_liveness_and_session_id_validation(self):
         with tempfile.TemporaryDirectory() as folder:
             state = Path(folder)

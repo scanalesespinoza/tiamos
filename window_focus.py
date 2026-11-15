@@ -1,6 +1,7 @@
-"""Window association and safe client-area docking for Windows companions."""
+"""Window association and docking through native desktop adapters."""
 from dataclasses import dataclass
 import os
+import sys
 from pathlib import PureWindowsPath
 
 
@@ -36,7 +37,10 @@ class Window:
 
     @property
     def terminal(self):
-        return PureWindowsPath(self.executable).name.lower() in {'windowsterminal.exe', 'openconsole.exe', 'conhost.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe'}
+        return PureWindowsPath(self.executable).name.lower() in {'windowsterminal.exe', 'openconsole.exe', 'conhost.exe', 'powershell.exe', 'pwsh.exe', 'cmd.exe',
+            'org.gnome.terminal.desktop', 'org.gnome.ptyxis.desktop', 'org.gnome.console.desktop',
+            'org.kde.konsole.desktop', 'kitty.desktop', 'alacritty.desktop', 'com.mitchellh.ghostty.desktop',
+            'xfce4-terminal.desktop', 'xterm.desktop', 'xterm', 'kitty', 'alacritty', 'xfce4-terminal'}
 
 
 def foreground_selection(bindings, foreground, selected):
@@ -61,6 +65,9 @@ class WindowSnapshot:
 
 class Windows:
     def __new__(cls):
+        if sys.platform == 'linux':
+            from linux_desktop import LinuxWindows
+            return LinuxWindows()
         if os.name != 'nt':
             from platform_runtime import PortableWindows
             return PortableWindows()

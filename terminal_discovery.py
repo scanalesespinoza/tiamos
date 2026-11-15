@@ -112,6 +112,9 @@ class TabBridge:
 
 
 def select_tab(record):
+    if os.name != 'nt':
+        from linux_tabs import select_tab as select_linux_tab
+        return select_linux_tab(record)
     bridge = TabBridge()
     try:
         reply = bridge.call({'mode': 'select', 'windows': [record['hwnd']], 'tab_id': record['tab_id']})

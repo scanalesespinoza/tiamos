@@ -68,6 +68,9 @@ def details_text(chat, now=None):
     if unavailable:
         phase = 'Última fase observada · ' + phase
     lines = [phase, observed]
+    if terminal.get('elevated') and not activity:
+        lines = ['CLI administrativo detectado en tu escritorio.',
+                 'Su actividad interna no está disponible; selecciona su pestaña para revisarla.']
     if duration:
         lines.append(duration)
     count = activity.get('action_count', 0)

@@ -4,7 +4,83 @@ Your CLI agents, at a glance: floating teammates with activity, experience, and 
 
 Formerly **Codex Float**. The command is now `agentlings`; `codex-float` remains a compatibility alias. Existing installations reuse their original state folder and locks, keeping positions, themes, history, and sound preferences. Fresh installations use the `Agentlings` state folder (`agentlings` on Linux). The legacy `CODEX_FLOAT_*` environment settings remain accepted; `AGENTLINGS_*` takes precedence. Repository: [scanalesespinoza/agentlings](https://github.com/scanalesespinoza/agentlings).
 
-**Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux/macOS are a portable beta; exact terminal-tab focus, automatic docking, and global shortcuts remain Windows-only. The Windows-specific workflow below continues to apply to the full Windows integration.
+**Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux now has optional [GNOME desktop integration](#linux-gnome-desktop-integration) for terminal focus, docking and global shortcuts. Other Linux desktops and macOS retain portable behavior. The Windows-specific workflow below continues to apply to the full Windows integration.
+
+## Linux GNOME desktop integration
+
+The source installation supports GNOME on Wayland (with XWayland for Tk) and X11 through a small Shell extension. It adds terminal activation/restoration, focus-dependent avatar sizing, docking to terminal geometry, monitor work areas and global shortcuts. Exact tab selection is available for GNOME Terminal through its accessibility metadata; terminal contents are never read. Other recognized terminals can be associated manually at the window level.
+
+On Fedora, install dependencies and then run the installer **as your desktop user**:
+
+```sh
+sudo dnf install python3-tkinter python3-pillow-tk python3-psutil python3-gobject python3-pyatspi gnome-terminal
+python3 scripts/install_linux.py --gnome-extension --autostart
+agentlings on
+```
+
+The installer copies the source application to `~/.local/share/agentlings/app`, adds `~/.local/bin/agentlings` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after first installing the extension.** New extension code loads at the next desktop login; the shortcut update from an already running v1 extension has the live-session compatibility path described below. The installer does not end your desktop session or enable Shell unsafe mode. Run `agentlings off` before updating an existing installation.
+
+With the extension available, `agentlings status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. **Ctrl+Alt+Page Down** advances through **top → left → bottom → right → top**; **Ctrl+Alt+Page Up** reverses that cycle. These are **AvPág** and **RePág** on Spanish keyboards. The bottom group is centered above the work-area edge and wraps upward. Both menus expose all four positions and the cycle actions. A placement action regroups manually moved or docked avatars, and the selected position persists across app restarts. Arrow shortcuts are no longer reserved on Linux; visibility remains available from the menu.
+
+Version 2 of the extension reserves exactly these two shortcuts, with no modifier fallback. If they are occupied, the app reports it and retains the placement menu. Updating from the already loaded version 1 works immediately without logging out: Agentlings releases its old arrow grabs and temporarily uses two named GNOME custom shortcuts that deliver placement-only D-Bus signals. Unrelated bindings are preserved. Normal shutdown removes these compatibility bindings; startup cleans up any left by a crashed monitor. At the next desktop login, extension v2 provides native grabs with the existing automatic crash cleanup. No desktop restart or Shell unsafe mode is used for this migration.
+
+Automatic tab association requires one unique exact tab title and a validated terminal-process ancestor, or a single terminal window with one tab and one CLI client. Multiple candidates remain unbound. For an ambiguous session, right-click its avatar, choose the existing manual binding action, and select its terminal tab within eight seconds. That binding remembers the selected GNOME Terminal tab, so double-clicking the avatar restores the same tab. Closed or replaced tab identities are rejected. Window IDs, process identity and current tab selection are checked before focus; a live CLI is never duplicated just because its window cannot be identified.
+
+Without the extension or optional Python desktop dependencies, Agentlings continues in `portable-beta` mode and reports the missing integration. Native Wayland integration on KDE/wlroots and exact tabs in terminals other than GNOME Terminal are not implemented. Fractional scaling and mixed-scale monitors still require validation; the local walkthrough covered GNOME 50 at 100% scale. Binary release packages remain portable unless built with the optional system desktop modules; the source installation above is the validated integration path.
+
+To disable just the integration:
+
+```sh
+gnome-extensions disable agentlings@agentlings.local
+```
+
+The regression suite and real desktop walkthrough can be run locally:
+
+```sh
+python3 -m unittest discover -s . -p 'test_*.py' -q
+# Additional Fedora test prerequisite:
+sudo dnf install dbus-daemon
+python3 scripts/smoke_linux_desktop.py
+# Previous-extension shortcut migration, with private D-Bus and in-memory settings:
+python3 scripts/smoke_legacy_shortcuts.py
+# Live placement keys and persistence (moves avatars and restarts only Agentlings):
+python3 scripts/check_live_placement.py
+# Kitty watcher and focus integration (temporary test terminal):
+python3 scripts/smoke_kitty.py
+# Real avatar double-clicks; requires running monitor and at least two bound Kitty sessions:
+python3 scripts/check_live_kitty.py
+```
+
+The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, both complete placement cycles, bottom alignment and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
+
+### Agents running through sudo or su
+
+Ordinary discovery observes the desktop user's CLI processes. A CLI running as root in that user's terminal would otherwise be missing from the avatars. An optional metadata observer can show these existing processes without restarting them or running the graphical application as root:
+
+```sh
+# Run from the desktop user's shell, after installing the application:
+sudo python3 scripts/install_observer.py --uid "$(id -u)"
+agentlings off
+agentlings on
+```
+
+The installer copies a root-owned observer and enables `agentlings-observer@<desktop-uid>.service`. It accepts only live elevated CLI processes descended from that user's terminal. Background servers and other users' processes are excluded. Without activity access, companions show **Admin 1**, **Admin 2**, etc., with an explicitly unknown state.
+
+For Codex clients running as root, opt into sanitized local activity and Kitty pane focus:
+
+```sh
+# Run as the desktop user:
+python3 scripts/install_linux.py --autostart --kitty
+sudo python3 scripts/install_observer.py --uid "$(id -u)" --activity
+```
+
+The activity option grants the root-owned observer read-only access to `/root/.codex` inside its service sandbox. For shared-server Codex clients, it correlates the latest substantial assistant text logged by each process with exactly one conversation. It then uses the normal incremental lifecycle reader for titles, activity, completion, XP and statistics. Matching is bounded and version-dependent; absent, ambiguous or insufficient recent evidence stays unknown. It never guesses a chat from its working directory. Raw transcripts, terminal text, environment, arguments and credentials are not exported. The desktop GUI stays unprivileged. Elevated Claude sessions currently retain metadata-only discovery.
+
+The Kitty installer adds a separate config include, a watcher and `Ctrl+Alt+Shift+F12` to start the private bridge. New Kitty windows start it automatically. For an already open Kitty instance, reload its config and press that shortcut once. The bridge receives Kitty's private control FD and exposes only filtered pane identities and focus of an existing pane through a socket restricted to the desktop user. It does not enable general remote control or expose terminal input/output. Exact shell ancestry connects each avatar to its pane; double-click selects it without launching another CLI. This adapter currently requires one Kitty instance with one native window; multiple tabs and split panes are supported, while ambiguous native windows remain unbound.
+
+Set `AGENTLINGS_DISABLE_ELEVATED_OBSERVER=1` to exclude elevated sessions from a monitor (also used to isolate synthetic desktop tests).
+
+Snapshots under `/run/agentlings-observer-<uid>` are root-owned, group-readable, atomically replaced and expire after eight seconds. The consumer rejects writable, redirected, oversized or expired files. `agentlings status` reports observer health separately. Disable it with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
 
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
