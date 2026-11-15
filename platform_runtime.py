@@ -9,36 +9,38 @@ import sys
 import uuid
 
 VERSION = '0.3.0-beta.6'
-APP_NAME = 'Agentlings'
+APP_NAME = 'tiamos'
 
 
 def state_directory():
-    override = os.environ.get('AGENTLINGS_STATE_DIR') or os.environ.get('CODEX_FLOAT_STATE_DIR')
+    override = (os.environ.get('TIAMOS_STATE_DIR') or os.environ.get('AGENTLINGS_STATE_DIR')
+                or os.environ.get('CODEX_FLOAT_STATE_DIR'))
     if override:
         return Path(override).expanduser().resolve()
     if os.name == 'nt':
         base = Path(os.environ.get('LOCALAPPDATA', Path.home()))
-        current, legacy = base / APP_NAME, base / 'CodexFloat'
+        previous = ('CodexFloat', 'Agentlings')
     elif sys.platform == 'darwin':
         base = Path.home() / 'Library/Application Support'
-        current, legacy = base / APP_NAME, base / 'CodexFloat'
+        previous = ('CodexFloat', 'Agentlings')
     else:
         base = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
-        current, legacy = base / 'agentlings', base / 'codex-float'
-    # Share existing preferences and locks with older running versions. No copy,
-    # move, or second independent monitor is introduced by the product rename.
-    return legacy if legacy.is_dir() else current
+        previous = ('codex-float', 'agentlings')
+    # Keep the original singleton lock and preferences, even if a new-name
+    # folder also exists. All compatibility commands use the same monitor.
+    return next((base/name for name in previous if (base/name).is_dir()), base/'tiamos')
 
 
 def discovery_enabled():
-    return os.environ.get('AGENTLINGS_DISABLE_DISCOVERY', os.environ.get('CODEX_FLOAT_DISABLE_DISCOVERY')) != '1'
+    return os.environ.get('TIAMOS_DISABLE_DISCOVERY', os.environ.get('AGENTLINGS_DISABLE_DISCOVERY',
+        os.environ.get('CODEX_FLOAT_DISABLE_DISCOVERY'))) != '1'
 
 
 def background_options():
     return {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session': True}
 
 
-def app_command(script='agentlings.py', *args, background=False):
+def app_command(script='tiamos.py', *args, background=False):
     if getattr(sys, 'frozen', False):
         mode = ['terminal-session'] if script == 'terminal_session.py' else []
         return [sys.executable, *mode, *args]

@@ -1,6 +1,6 @@
 """Verify requested placement shortcuts in the user's active GNOME session.
 
-Moves the existing avatars through both cycles, restarts only Agentlings to
+Moves the existing avatars through both cycles, restarts only tiamos to
 check persistence, then restores the original placement. Never restarts agents,
 Kitty, or the desktop. Run as the desktop user after installing this version.
 """
@@ -62,7 +62,7 @@ def main():
     try:
         for direction in (1,)*len(PLACEMENT_CYCLE)+(-1,)*len(PLACEMENT_CYCLE):step(direction)
         while state()['layout']!='right':step(1)
-        app=Path.home()/'.local/bin/agentlings'
+        app=Path.home()/'.local/bin/tiamos'
         subprocess.run([str(app),'off'],check=True,timeout=15)
         assert all('/agentlings-cycle_' not in p for p in bindings.get_strv('custom-keybindings'))
         assert unrelated()==other_bindings

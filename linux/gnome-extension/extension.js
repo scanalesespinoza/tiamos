@@ -15,7 +15,7 @@ const KEYS = [['cycle_next', 'Page_Down'], ['cycle_previous', 'Page_Up']];
 const TERMINALS = new Set(['org.gnome.Terminal', 'org.gnome.Ptyxis', 'org.gnome.Console',
     'org.kde.konsole', 'kitty', 'Alacritty', 'com.mitchellh.ghostty', 'xfce4-terminal', 'xterm']);
 
-export default class Agentlings extends Extension {
+export default class tiamos extends Extension {
     enable() {
         this._owner = null;
         this._watch = 0;
@@ -88,7 +88,7 @@ export default class Agentlings extends Extension {
     AttachAsync(_args, invocation) {
         const sender = invocation.get_sender();
         if (this._owner && this._owner !== sender) {
-            invocation.return_dbus_error('org.agentlings.Busy', 'Another Agentlings monitor owns the shortcuts.');
+            invocation.return_dbus_error('org.agentlings.Busy', 'Another tiamos monitor owns the shortcuts.');
             return;
         }
         if (!this._owner) {
@@ -112,7 +112,7 @@ export default class Agentlings extends Extension {
                 break;
             this._release();
         }
-        this._error = this._held.size ? null : 'Atajos ocupados; utiliza el menú de Agentlings.';
+        this._error = this._held.size ? null : 'Atajos ocupados; utiliza el menú de tiamos.';
         invocation.return_value(new GLib.Variant('(s)', [JSON.stringify({labels: this._labels, error: this._error})]));
     }
 

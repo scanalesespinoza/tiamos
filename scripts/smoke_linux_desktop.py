@@ -45,7 +45,7 @@ def inside(folder):
         return process
     def run(command):
         return subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
-    app = [sys.executable, str(ROOT/'agentlings.py')]
+    app = [sys.executable, str(ROOT/'tiamos.py')]
     connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
     def call(dest, path, iface, method, signature=None, values=()):
         return connection.call_sync(dest, path, iface, method,
@@ -59,11 +59,11 @@ def inside(folder):
         time.sleep(.3)
         spawn(['/usr/libexec/at-spi2-registryd'])
         shell = spawn(['gnome-shell', '--headless', '--wayland', '--virtual-monitor', '1280x900',
-                       '--wayland-display', 'agentlings-test'])
+                       '--wayland-display', 'tiamos-test'])
         desktop = bridge()
         until(lambda: desktop.refresh(force=True).get('version') == 1, 'GNOME bridge did not load')
         assert shell.poll() is None
-        os.environ['WAYLAND_DISPLAY'] = 'agentlings-test'
+        os.environ['WAYLAND_DISPLAY'] = 'tiamos-test'
         os.environ['GDK_BACKEND'] = 'wayland'
         # Tk uses the private compositor's XWayland server, not the host display.
         match = until(lambda: re.search(r'Using public X11 display (:\d+)', (folder/'desktop.log').read_text()),
@@ -74,13 +74,13 @@ def inside(folder):
         spawn(['/usr/libexec/gnome-terminal-server'])
         until(lambda: call('org.freedesktop.DBus', '/org/freedesktop/DBus',
             'org.freedesktop.DBus', 'NameHasOwner', '(s)', ('org.gnome.Terminal',))[0], 'Terminal server did not start')
-        run(['gnome-terminal', '--window', '--title=Agentlings smoke A', '--command=sleep 180',
-             '--tab', '--title=Agentlings smoke B', '--command=sleep 180'])
+        run(['gnome-terminal', '--window', '--title=tiamos smoke A', '--command=sleep 180',
+             '--tab', '--title=tiamos smoke B', '--command=sleep 180'])
         native = LinuxWindows()
         window = until(lambda: next(iter(native.all_terminal_windows()), None), 'No terminal window')
         records = until(lambda: (rows if len(rows := window_tabs(native.inspect(window.hwnd), tabs(force=True))) == 2 else None),
                         'Expected two real accessible tabs')
-        assert {row['title'] for row in records} == {'Agentlings smoke A', 'Agentlings smoke B'}
+        assert {row['title'] for row in records} == {'tiamos smoke A', 'tiamos smoke B'}
         for record in records:
             select_tab(dict(hwnd=window.hwnd, window_pid=window.pid, tab_id=record['id']))
             until(lambda: desktop.refresh(force=True).get('foreground') == window.hwnd, 'Terminal did not focus')
@@ -121,7 +121,7 @@ def inside(folder):
                 'heartbeat': time.time()+120, 'started_at': stamp.timestamp(), 'kind': 'tab',
                 'hwnd': window.hwnd, 'window_pid': window.pid, 'tab_id': record['id'], 'selected': record['selected']}))
         connection_db.commit(); connection_db.close()
-        os.environ.update(CODEX_HOME=str(codex), CLAUDE_CONFIG_DIR=str(folder/'claude'), AGENTLINGS_STATE_DIR=str(state))
+        os.environ.update(CODEX_HOME=str(codex), CLAUDE_CONFIG_DIR=str(folder/'claude'), TIAMOS_STATE_DIR=str(state))
         run([*app, 'on'])
         monitor_started = True
         def status():
@@ -229,23 +229,23 @@ def main():
         # Never permit a direct invocation to inject input into the user's bus.
         folder = Path(sys.argv[2])
         assert os.environ.get('XDG_RUNTIME_DIR') == str(folder/'runtime')
-        assert os.environ.get('AGENTLINGS_PRIVATE_DESKTOP_TEST') == str(folder)
+        assert os.environ.get('TIAMOS_PRIVATE_DESKTOP_TEST') == str(folder)
         inside(folder)
         return
     if os.getuid() == 0:
         raise SystemExit('Run as a desktop user, not root.')
-    with tempfile.TemporaryDirectory(prefix='agentlings-desktop-test-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='tiamos-desktop-test-') as tmp:
         folder = Path(tmp)
         for name in ('runtime', 'config', 'share'):
             (folder/name).mkdir(mode=0o700)
         shutil.copytree(ROOT/'linux/gnome-extension', folder/'share/gnome-shell/extensions/agentlings@agentlings.local')
         env = os.environ.copy()
         for name in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'DBUS_SESSION_BUS_ADDRESS', 'AT_SPI_BUS_ADDRESS',
-                     'AGENTLINGS_DISABLE_DISCOVERY', 'CODEX_FLOAT_DISABLE_DISCOVERY'):
+                     'TIAMOS_DISABLE_DISCOVERY', 'CODEX_FLOAT_DISABLE_DISCOVERY'):
             env.pop(name, None)
         env.update(XDG_RUNTIME_DIR=str(folder/'runtime'), XDG_CONFIG_HOME=str(folder/'config'),
-            XDG_DATA_HOME=str(folder/'share'), GSETTINGS_BACKEND='keyfile', AGENTLINGS_DISABLE_ELEVATED_OBSERVER='1',
-            XDG_CURRENT_DESKTOP='GNOME', LIBGL_ALWAYS_SOFTWARE='1', AGENTLINGS_PRIVATE_DESKTOP_TEST=str(folder))
+            XDG_DATA_HOME=str(folder/'share'), GSETTINGS_BACKEND='keyfile', TIAMOS_DISABLE_ELEVATED_OBSERVER='1',
+            XDG_CURRENT_DESKTOP='GNOME', LIBGL_ALWAYS_SOFTWARE='1', TIAMOS_PRIVATE_DESKTOP_TEST=str(folder))
         # No automatic service directories: tests must not start the operator's
         # online accounts, keyring, FUSE mounts or other desktop services.
         config = folder/'bus.conf'

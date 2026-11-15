@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def install_file(source, destination):
-    fd, temporary = tempfile.mkstemp(prefix='.agentlings-', dir=destination.parent)
+    fd, temporary = tempfile.mkstemp(prefix='.tiamos-', dir=destination.parent)
     try:
         with os.fdopen(fd, 'wb') as stream:
             stream.write(source.read_bytes())

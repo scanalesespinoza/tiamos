@@ -56,7 +56,7 @@ class Reader:
         self.discovery = None
         self.claude = None
         self.elevated = None
-        if sys.platform == 'linux' and cli_only and discover and os.environ.get('AGENTLINGS_DISABLE_ELEVATED_OBSERVER') != '1':
+        if sys.platform == 'linux' and cli_only and discover and os.environ.get('TIAMOS_DISABLE_ELEVATED_OBSERVER', os.environ.get('AGENTLINGS_DISABLE_ELEVATED_OBSERVER')) != '1':
             from elevated_sessions import ElevatedSessions
             self.elevated = ElevatedSessions()
         self.included_loader = included_loader or (lambda: {})
@@ -176,7 +176,7 @@ def serve():
         return
     root = tk.Tk()
     root.withdraw()
-    root.title('Agentlings')
+    root.title('tiamos')
     identities = load_json(STATE / 'identities.json', {})
     notices = Notices(load_json(STATE / 'notices.json', {}))
     attention = AttentionInbox(load_json(STATE / 'attention.json', {}))
@@ -399,7 +399,7 @@ def serve():
             return 'break'
         try:
             if terminal.get('elevated'):
-                raise RuntimeError('Este agente sigue abierto con permisos elevados. Selecciona su pestaña en la terminal; Agentlings no abre otra sesión administrativa.')
+                raise RuntimeError('Este agente sigue abierto con permisos elevados. Selecciona su pestaña en la terminal; tiamos no abre otra sesión administrativa.')
             if entry['chat'].get('provider') == 'claude':
                 from claude_sessions import launch_claude
                 launch_claude(entry['chat'])
@@ -411,7 +411,7 @@ def serve():
             focus_error = str(error)
             if os.name != 'nt':
                 from tkinter import messagebox
-                messagebox.showinfo('Agentlings', focus_error, parent=root)
+                messagebox.showinfo('tiamos', focus_error, parent=root)
         return 'break'
 
     def bind_to_next_window(ident):
@@ -515,7 +515,7 @@ def serve():
             atomic_json(STATE / 'identities.json', identities)
         window = tk.Toplevel(root)
         window.withdraw()
-        window.title('Agentlings - ' + chat['title'])
+        window.title('tiamos - ' + chat['title'])
         window.overrideredirect(True)
         window.attributes('-topmost', True)
         window.configure(bg=theme['background'], highlightbackground='#46536b', highlightthickness=1)
@@ -704,7 +704,7 @@ def serve():
                         if bindings.get(chat['id']) != binding:
                             bindings[chat['id']] = binding
                             atomic_json(bindings_path, bindings)
-                    entry['window'].title('Agentlings - ' + chat['title'])
+                    entry['window'].title('tiamos - ' + chat['title'])
         except queue.Empty:
             pass
         foreground = native.foreground()
@@ -926,7 +926,7 @@ def theme_command(args, parser):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Agentlings: compañeros flotantes para agentes CLI.')
+    parser = argparse.ArgumentParser(description='tiamos (team OS): compañeros flotantes para agentes CLI.')
     parser.add_argument('--version', action='version', version=VERSION)
     parser.add_argument('command', nargs='?', default='toggle', choices=['on', 'off', 'toggle', 'status', 'serve', 'new', 'resume', 'list', 'theme', 'refresh'])
     parser.add_argument('target', nargs='?', help='Carpeta para new; UUID de sesion para resume.')
@@ -943,7 +943,7 @@ def main():
                 config = read_config(STATE / 'themes.json')
                 write_config(STATE / 'themes.json', config)
                 if not running():
-                    print('Colores validados. Se aplicaran al ejecutar agentlings on.')
+                    print('Colores validados. Se aplicaran al ejecutar tiamos on.')
                     return
                 for _ in range(50):
                     status = running() or {}
@@ -951,7 +951,7 @@ def main():
                         print('Colores recargados sin reiniciar los avatares.')
                         return
                     time.sleep(.1)
-                raise ValueError('No se pudo confirmar la recarga. Consulta agentlings status.')
+                raise ValueError('No se pudo confirmar la recarga. Consulta tiamos status.')
         except (OSError, ValueError) as error:
             raise SystemExit(str(error))
         return
@@ -962,13 +962,13 @@ def main():
         try:
             ident = create_session(args.target or os.getcwd()) if args.command == 'new' else args.target
             if not ident:
-                parser.error('resume requiere el UUID de la sesion. Consulta agentlings list --all.')
+                parser.error('resume requiere el UUID de la sesion. Consulta tiamos list --all.')
             launch(ident)
             print(f'Codex CLI: {ident}')
         except (OSError, RuntimeError, ValueError) as error:
             raise SystemExit(str(error))
         if not running():
-            subprocess.run(app_command('agentlings.py', 'on'), check=True)
+            subprocess.run(app_command('tiamos.py', 'on'), check=True)
         return
     if args.command == 'list':
         reader = Reader(cli_only=not args.all, discover=not args.all)
@@ -990,19 +990,19 @@ def main():
                     break
                 time.sleep(.1)
             if running():
-                raise SystemExit('No se pudo confirmar el apagado. Ejecuta agentlings status.')
-        print('Agentlings apagado.')
+                raise SystemExit('No se pudo confirmar el apagado. Ejecuta tiamos status.')
+        print('tiamos apagado.')
     elif current:
-        print('Agentlings ya esta encendido.')
+        print('tiamos ya esta encendido.')
     else:
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / 'stop').unlink(missing_ok=True)
         with (STATE / 'app.log').open('a', encoding='utf-8') as log:
-            child = subprocess.Popen(app_command('agentlings.py', 'serve', background=True), cwd=BASE,
+            child = subprocess.Popen(app_command('tiamos.py', 'serve', background=True), cwd=BASE,
                                      stdout=log, stderr=log, **background_options())
         for _ in range(60):
             if running():
-                print('Agentlings encendido. Arrastra los terminales; clic derecho para apagar.')
+                print('tiamos encendido. Arrastra los terminales; clic derecho para apagar.')
                 return
             time.sleep(.1)
         if child.poll() is None:

@@ -25,7 +25,7 @@ def main():
         import gi
         import pyatspi
     home = Path.home()
-    app = home / '.local/share/agentlings/app'
+    app = home / '.local/share/tiamos/app'
     app.mkdir(parents=True, exist_ok=True)
     for source in ROOT.glob('*.py'):
         if not source.name.startswith('test_'):
@@ -33,30 +33,46 @@ def main():
     if args.kitty:
         kitty = home / '.config/kitty'
         kitty.mkdir(parents=True, exist_ok=True)
-        fragment = kitty/'agentlings.conf'
+        fragment = kitty/'tiamos.conf'
         fragment.write_text(f'watcher {app}/kitty_watcher.py\nmap ctrl+alt+shift+f12 remote_control_script {app}/kitty_bridge.py\n')
         config = kitty/'kitty.conf'
         content = config.read_text() if config.exists() else ''
-        if 'include agentlings.conf' not in content.splitlines():
-            config.write_text(content+'\n# Agentlings local pane focus bridge\ninclude agentlings.conf\n')
-    launcher = home / '.local/bin/agentlings'
+        content = content.replace('include agentlings.conf', 'include tiamos.conf').replace('# Agentlings local pane focus bridge', '# tiamos local pane focus bridge')
+        if 'include tiamos.conf' not in content.splitlines():
+            content += '\n# tiamos local pane focus bridge\ninclude tiamos.conf\n'
+        config.write_text(content)
+    launcher = home / '.local/bin/tiamos'
     launcher.parent.mkdir(parents=True, exist_ok=True)
-    launcher.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, str(app/'agentlings.py')]) + ' "$@"\n')
+    launcher.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, str(app/'tiamos.py')]) + ' "$@"\n')
     launcher.chmod(0o755)
-    alias = launcher.with_name('codex-float')
-    if not alias.exists() and not alias.is_symlink():
-        alias.symlink_to('agentlings')
+    for name in ('agentlings', 'codex-float'):
+        alias = launcher.with_name(name)
+        if alias.is_symlink() and alias.readlink().name in ('agentlings', 'tiamos'):
+            alias.unlink()
+        elif alias.is_file():
+            old = alias.read_text()
+            if '/agentlings/app/agentlings.py' in old or '/tiamos/app/tiamos.py' in old:
+                alias.unlink()
+            else:
+                raise SystemExit(f'Preserving unrelated launcher: {alias}')
+        if not alias.exists():
+            alias.symlink_to('tiamos')
     desktop_command = '"' + str(launcher).replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%') + '"'
-    desktop = ('[Desktop Entry]\nType=Application\nName=Agentlings\n'
+    desktop = ('[Desktop Entry]\nType=Application\nName=tiamos\n'
                f'Exec={desktop_command} on\n'
                'Icon=face-smile\nTerminal=false\nCategories=Development;\n')
-    entry = home / '.local/share/applications/agentlings.desktop'
+    entry = home / '.local/share/applications/tiamos.desktop'
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_text(desktop)
-    if args.autostart:
-        entry = home / '.config/autostart/agentlings.desktop'
+    old_autostart = home / '.config/autostart/agentlings.desktop'
+    preserve_autostart = old_autostart.exists() and 'Name=Agentlings' in old_autostart.read_text()
+    if args.autostart or preserve_autostart:
+        entry = home / '.config/autostart/tiamos.desktop'
         entry.parent.mkdir(parents=True, exist_ok=True)
         entry.write_text(desktop)
+    for old in (home/'.local/share/applications/agentlings.desktop', old_autostart):
+        if old.is_file() and 'Name=Agentlings' in old.read_text():
+            old.unlink()
     if args.gnome_extension:
         from gi.repository import Gio
         destination = home / '.local/share/gnome-shell/extensions' / UUID
@@ -68,7 +84,7 @@ def main():
                 raise SystemExit('GNOME extension settings are not writable.')
         Gio.Settings.sync()
         print('GNOME extension installed; new code loads at the next desktop login. Existing v1 placement shortcuts update without logout.')
-    print(f'Installed: {launcher}\nStart with: agentlings on')
+    print(f'Installed: {launcher}\nStart with: tiamos on')
 
 
 if __name__ == '__main__':

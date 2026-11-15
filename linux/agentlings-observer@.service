@@ -1,5 +1,5 @@
 [Unit]
-Description=Agentlings elevated CLI metadata for desktop UID %i
+Description=tiamos elevated CLI metadata for desktop UID %i
 After=systemd-user-sessions.service
 
 [Service]

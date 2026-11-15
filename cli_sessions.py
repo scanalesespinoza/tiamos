@@ -73,7 +73,7 @@ class LocalServer:
         self.reader_thread = threading.Thread(target=drain, daemon=True)
         self.reader_thread.start()
         try:
-            self.call('initialize', {'clientInfo': {'name': 'agentlings', 'version': VERSION}})
+            self.call('initialize', {'clientInfo': {'name': 'tiamos', 'version': VERSION}})
             self.send({'method': 'initialized', 'params': {}})
         except Exception:
             self.__exit__(None, None, None)

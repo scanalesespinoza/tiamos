@@ -121,7 +121,7 @@ class StarredMarker:
             # Independent of the terminal/companion window's minimize state.
             self.window = tk.Toplevel(self.root)
             self.window.withdraw()
-            self.window.title('Agentlings · Starred')
+            self.window.title('tiamos · Starred')
             self.window.overrideredirect(True)
             if os.name == 'nt':
                 self.window.attributes('-toolwindow', True)

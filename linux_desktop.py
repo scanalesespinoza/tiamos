@@ -64,7 +64,7 @@ class DesktopBridge:
         except Exception:
             # A compositor restart invalidates all window IDs and shortcut claims.
             self.data, self.available, self.attached, self.labels = {}, False, False, {}
-            self.error = 'Integración GNOME no disponible; instala y activa la extensión de Agentlings.'
+            self.error = 'Integración GNOME no disponible; instala y activa la extensión de tiamos.'
             self.next_poll = time.monotonic() + 3
         return self.data
 

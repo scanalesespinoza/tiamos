@@ -1,8 +1,8 @@
 # Desktop releases
 
-Download from [Agentlings releases](https://github.com/scanalesespinoza/agentlings/releases).
+Download from [tiamos releases](https://github.com/scanalesespinoza/tiamos/releases).
 
-The Agentlings release is **0.3.0-beta.6** (formerly Codex Float). Download an archive and its
+The tiamos release is **0.3.0-beta.6** (formerly Agentlings and Codex Float). Download an archive and its
 `.sha256` file from the repository's GitHub Releases page. Extract the entire
 archive; the executable needs its sibling `_internal` directory. Python is bundled.
 Codex CLI and Claude CLI are separate installations and must be available on PATH.
@@ -25,7 +25,7 @@ Codex CLI and Claude CLI are separate installations and must be available on PAT
 ## Previous changes in beta.3
 
 - The existing group button shows a discreet activity/attention border and its menu summarizes observed team state and avatar visibility.
-- Restore all hidden companions in one action, reposition the group, toggle quiet mode, or stop Agentlings even when no avatars are visible.
+- Restore all hidden companions in one action, reposition the group, toggle quiet mode, or stop tiamos even when no avatars are visible.
 - History distinguishes loading, empty history, and unmatched searches, preserves read warnings and valid selection, and supports Down/Enter/Escape navigation. Loading and stale selections cannot add duplicate avatars.
 - No larger avatars, additional polling timer, dependency, or background process is introduced. Native group/history tests now run on all release operating systems.
 
@@ -36,8 +36,8 @@ Codex CLI and Claude CLI are separate installations and must be available on PAT
 | `macos-arm64.tar.gz` | macOS 14+ on Apple Silicon |
 | `macos-x64.tar.gz` | macOS 15+ on Intel |
 
-Names include `agentlings-<version>-` before the platform. On Windows run
-`agentlings.exe on`. On Linux/macOS run `./agentlings on` from the extracted
+Names include `tiamos-<version>-` before the platform. On Windows run
+`tiamos.exe on`. On Linux/macOS run `./tiamos on` from the extracted
 directory. `off`, `toggle`, `status`, `list`, `new`, `resume`, and `--version` are
 also available. No arguments toggles the desktop companions. Add the extracted
 directory to PATH if you want to run the command from anywhere.
@@ -76,16 +76,16 @@ Native Wayland-only operation is not supported by this Tk release: XWayland is n
 and compositors may restrict topmost positioning. Linux/macOS desktop behavior is
 beta pending validation in users' actual terminal/compositor combinations.
 
-State locations: `%LOCALAPPDATA%/Agentlings` on Windows,
-`~/Library/Application Support/Agentlings` on macOS, and
-`${XDG_STATE_HOME:-~/.local/state}/agentlings` on Linux.
-Existing installations continue using their original `CodexFloat` folder (`codex-float`
-on Linux), including its singleton lock, so the old and new commands control the same
-avatars. No configuration is copied or deleted. Archives include a `codex-float`
-compatibility command; use `agentlings` for new integrations. The old `CODEX_FLOAT_*`
-environment names remain aliases; `AGENTLINGS_*` wins when both are set.
-`AGENTLINGS_STATE_DIR` overrides the state folder for isolated testing.
-`AGENTLINGS_DISABLE_DISCOVERY=1` disables process/terminal discovery for synthetic
+State locations: `%LOCALAPPDATA%/tiamos` on Windows,
+`~/Library/Application Support/tiamos` on macOS, and
+`${XDG_STATE_HOME:-~/.local/state}/tiamos` on Linux.
+Existing installations keep their original `Agentlings`/`agentlings` or
+`CodexFloat`/`codex-float` state folder and singleton lock. No preferences are
+copied or deleted. Archives include both `agentlings` and `codex-float`
+compatibility commands; use `tiamos` for new integrations. Environment precedence
+is `TIAMOS_*`, then `AGENTLINGS_*`, then `CODEX_FLOAT_*`.
+`TIAMOS_STATE_DIR` overrides the state folder for isolated testing.
+`TIAMOS_DISABLE_DISCOVERY=1` disables process/terminal discovery for synthetic
 tests; it is not intended for normal CLI monitoring.
 
 ## Build and publish
@@ -100,10 +100,10 @@ Build **on each target OS** with Python 3.12 and Tk:
 ```sh
 python -m pip install -r requirements-build.txt
 python scripts/build_release.py
-python scripts/smoke_release.py dist/agentlings/agentlings
+python scripts/smoke_release.py dist/tiamos/tiamos
 ```
 
-Use `agentlings.exe` in the last command on Windows. Linux GUI checks run under
+Use `tiamos.exe` in the last command on Windows. Linux GUI checks run under
 `xvfb-run -a` in CI. The workflow tests source behavior, builds the archive, and
 starts the actual packaged desktop with a synthetic session, verifies its avatar,
 menu, statistics and singleton behavior, then shuts it down. Checksums accompany

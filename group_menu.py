@@ -44,7 +44,7 @@ class HistoryPicker:
         self.warnings = []
         self.window = tk.Toplevel(root)
         self.window.withdraw()
-        self.window.title('Sesiones anteriores · Agentlings')
+        self.window.title('Sesiones anteriores · tiamos')
         self.window.geometry('520x340')
         self.window.minsize(400, 260)
         self.window.attributes('-topmost', True)
@@ -188,7 +188,7 @@ class GroupMenu:
         self.summary, self.indicator_color = {}, None
         self.window = tk.Toplevel(root)
         self.window.withdraw()
-        self.window.title('Agentlings · Menú')
+        self.window.title('tiamos · Menú')
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
         transparent = '#ff00ff' if os.name == 'nt' else '#263447'
@@ -234,7 +234,7 @@ class GroupMenu:
         self.variables.clear()
         self.refresh_indicator()
         summary = self.summary
-        self.menu.add_command(label='Agentlings · ' + (f'{summary["total"]} sesión' if summary['total'] == 1 else f'{summary["total"]} sesiones'), state='disabled')
+        self.menu.add_command(label='tiamos · ' + (f'{summary["total"]} sesión' if summary['total'] == 1 else f'{summary["total"]} sesiones'), state='disabled')
         parts = [f'{summary[key]} {label}' for key, label in [('working', 'trabajando'), ('resting', 'en descanso'), ('unknown', 'sin estado')]
                  if summary[key]]
         self.menu.add_command(label=' · '.join(parts) or 'Abre Codex o Claude CLI para empezar', state='disabled')
@@ -277,5 +277,5 @@ class GroupMenu:
             self.menu.add_cascade(label='Sonidos', menu=self.sound_menu.menu)
         if self.shutdown:
             self.menu.add_separator()
-            self.menu.add_command(label='Apagar Agentlings', command=self.shutdown)
+            self.menu.add_command(label='Apagar tiamos', command=self.shutdown)
         return self.details.popup_menu(self.menu, event.x_root, event.y_root)

@@ -80,7 +80,7 @@ class GroupMenuTests(unittest.TestCase):
         quiet.assert_called_once_with(True)
         menu.placement_menu.invoke(menu_index(menu.placement_menu,'Arriba centro'))
         place.assert_called_once_with('top')
-        menu.menu.invoke(menu_index(menu.menu,'Apagar Agentlings'))
+        menu.menu.invoke(menu_index(menu.menu,'Apagar tiamos'))
         shutdown.assert_called_once_with()
 
     def test_reveal_all_is_distinct_from_global_visibility_toggle(self):

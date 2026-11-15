@@ -1,5 +1,5 @@
-"""Agentlings command-line and packaged desktop entry point."""
+"""Compatibility entry point for tiamos, formerly Agentlings."""
 from launcher import main
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
