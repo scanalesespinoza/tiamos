@@ -96,11 +96,21 @@ class PortableHotkeys:
     def close(self): pass
 
 
-def capabilities():
+def capabilities(native=None, hotkeys=None):
     windows = os.name == 'nt'
-    return {'app': APP_NAME, 'platform': sys.platform, 'version': VERSION, 'terminal_tab_focus': windows,
+    result = {'app': APP_NAME, 'platform': sys.platform, 'version': VERSION, 'terminal_tab_focus': windows,
             'automatic_docking': windows, 'global_hotkeys': windows,
             'desktop_mode': 'native' if windows else 'portable-beta'}
+    if sys.platform == 'linux' and native is not None:
+        import importlib.util
+        from linux_desktop import bridge
+        available = bridge().available
+        result.update(window_focus=available, automatic_docking=available,
+            terminal_tab_focus=available and importlib.util.find_spec('pyatspi') is not None,
+            global_hotkeys=bool(hotkeys and hotkeys.labels),
+            desktop_mode='gnome' if available else 'portable-beta',
+            desktop_error=bridge().error)
+    return result
 
 
 def launch_terminal(command, cwd):

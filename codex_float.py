@@ -403,9 +403,12 @@ def serve():
                 return window
         return None
 
-    def associate(ident, window, manual=False):
+    def associate(ident, window, manual=False, tab_id=None):
         nonlocal selected, focus_error, selection_epoch, follow_selection
         bindings[ident] = {'hwnd': window.hwnd, 'pid': window.pid, 'executable': window.executable, 'manual': manual}
+        if sys.platform == 'linux' and manual:
+            from linux_tabs import selected_tab
+            bindings[ident]['tab_id'] = tab_id or selected_tab(window)
         atomic_json(bindings_path, bindings)
         selected = ident
         selection_epoch = time.time()
@@ -424,16 +427,17 @@ def serve():
         terminal = entry.get('terminal') or {}
         if target and (bindings.get(ident, {}).get('manual') or terminal.get('live')):
             if not native.activate(target):
-                focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
+                focus_error = 'El escritorio no permitió activar la terminal. Selecciónala y vuelve a intentar.'
                 return 'break'
-            if terminal.get('kind') == 'tab':
+            manual_tab = bindings.get(ident, {}).get('tab_id')
+            if terminal.get('kind') == 'tab' or manual_tab:
                 from terminal_discovery import select_tab
                 try:
-                    select_tab(terminal)
+                    select_tab(dict(terminal, hwnd=target.hwnd, window_pid=target.pid, tab_id=manual_tab) if manual_tab else terminal)
                 except RuntimeError as error:
                     focus_error = str(error)
                     return 'break'
-            associate(ident, target, manual=bindings.get(ident, {}).get('manual', False))
+            associate(ident, target, manual=bindings.get(ident, {}).get('manual', False), tab_id=manual_tab)
             return 'break'
         try:
             if entry['chat'].get('provider') == 'claude':
@@ -677,6 +681,8 @@ def serve():
 
     def tick():
         nonlocal last_error, tick_number, selected, pending, bind_request, focus_error
+        if hasattr(hotkeys, 'poll'):
+            hotkeys.poll()
         observed_windows = WindowSnapshot(native.inspect)
         history_picker.poll()
         if tick_number % 10 == 0:
@@ -730,7 +736,7 @@ def serve():
                     entry['terminal'] = chat.get('terminal')
                     terminal = chat.get('terminal') or {}
                     host = observed_windows.inspect(terminal.get('hwnd')) if terminal.get('live') else None
-                    if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or terminal.get('token') in host.title):
+                    if host and host.pid == terminal.get('window_pid') and (terminal.get('kind') == 'tab' or (terminal.get('token') and terminal['token'] in host.title)) and (sys.platform != 'linux' or not bindings.get(chat['id'], {}).get('manual')):
                         binding = {'hwnd': host.hwnd, 'pid': host.pid, 'executable': host.executable, 'manual': False}
                         if bindings.get(chat['id']) != binding:
                             bindings[chat['id']] = binding
@@ -758,7 +764,7 @@ def serve():
                 if native.activate(target):
                     associate(ident, target)
                 else:
-                    focus_error = 'Windows no permitió activar la terminal. Selecciónala y vuelve a intentar.'
+                    focus_error = 'El escritorio no permitió activar la terminal. Selecciónala y vuelve a intentar.'
                 pending = None
         valid_bindings = {}
         for ident, entry in widgets.items():
@@ -766,7 +772,12 @@ def serve():
             if not host or not host.visible or host.minimized:
                 continue
             terminal = entry.get('terminal') or {}
-            if terminal.get('kind') == 'tab':
+            tab_id = bindings.get(ident, {}).get('tab_id') or terminal.get('tab_id')
+            if sys.platform == 'linux' and tab_id:
+                from linux_tabs import tab_selected
+                if tab_selected(host, tab_id):
+                    valid_bindings[ident] = host.hwnd
+            elif terminal.get('kind') == 'tab':
                 # Do not highlight a CLI from an inactive tab of this window.
                 fresh = terminal.get('heartbeat', 0) >= selection_epoch
                 if (fresh and terminal.get('selected')) or (not fresh and ident == selected):
@@ -869,7 +880,7 @@ def serve():
         if tick_number % 10 == 0:
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
-                'capabilities': capabilities(),
+                'capabilities': capabilities(native, hotkeys),
                 'chats': len(widgets),
                 'working': sum(v['state'] == 'working' for v in widgets.values()),
                 'error': last_error, 'focus_error': focus_error, 'selected': selected,

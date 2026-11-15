@@ -160,7 +160,14 @@ def launch(ident):
     native = Windows()
     if existing and existing['live']:
         if os.name != 'nt':
-            raise RuntimeError('La sesión ya está abierta. Selecciona su pestaña en la terminal; el enfoque automático requiere Windows.')
+            if existing.get('kind') == 'tab':
+                from terminal_discovery import select_tab
+                select_tab(existing)
+                return ident
+            window = native.inspect(existing.get('hwnd'))
+            if window and window.pid == existing.get('window_pid') and existing.get('token') and existing['token'] in window.title and native.activate(window):
+                return ident
+            raise RuntimeError('La sesión ya está abierta. Vincula su terminal desde el menú del avatar o selecciona su pestaña.')
         window = native.inspect(existing.get('hwnd'))
         tab = existing.get('kind') == 'tab'
         if window and window.pid == existing.get('window_pid') and (tab or existing.get('token') in window.title):

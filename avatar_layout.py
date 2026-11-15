@@ -1,9 +1,10 @@
-"""Group placement and collision-aware registration of Windows hotkeys."""
+"""Group placement and collision-aware native desktop shortcuts."""
 import ctypes as C
 from ctypes import wintypes as W
 import queue
 import threading
 import os
+import sys
 from itertools import chain
 
 
@@ -89,6 +90,9 @@ def register_available(register, unregister):
 
 class GlobalHotkeys:
     def __new__(cls):
+        if sys.platform == 'linux':
+            from linux_desktop import LinuxHotkeys
+            return LinuxHotkeys()
         if os.name != 'nt':
             from platform_runtime import PortableHotkeys
             return PortableHotkeys()
@@ -138,6 +142,11 @@ class GlobalHotkeys:
 
 
 def monitor_work_area(position=None):
+    if sys.platform == 'linux':
+        from linux_desktop import work_area
+        area = work_area(position)
+        if area:
+            return area
     if os.name != 'nt':
         import tkinter as tk
         root = tk._default_root

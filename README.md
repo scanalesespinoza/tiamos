@@ -4,7 +4,44 @@ Your CLI agents, at a glance: floating teammates with activity, experience, and 
 
 Formerly **Codex Float**. The command is now `agentlings`; `codex-float` remains a compatibility alias. Existing installations reuse their original state folder and locks, keeping positions, themes, history, and sound preferences. Fresh installations use the `Agentlings` state folder (`agentlings` on Linux). The legacy `CODEX_FLOAT_*` environment settings remain accepted; `AGENTLINGS_*` takes precedence. Repository: [scanalesespinoza/agentlings](https://github.com/scanalesespinoza/agentlings).
 
-**Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux/macOS are a portable beta; exact terminal-tab focus, automatic docking, and global shortcuts remain Windows-only. The Windows-specific workflow below continues to apply to the full Windows integration.
+**Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux now has optional [GNOME desktop integration](#linux-gnome-desktop-integration) for terminal focus, docking and global shortcuts. Other Linux desktops and macOS retain portable behavior. The Windows-specific workflow below continues to apply to the full Windows integration.
+
+## Linux GNOME desktop integration
+
+The source installation supports GNOME on Wayland (with XWayland for Tk) and X11 through a small Shell extension. It adds terminal activation/restoration, focus-dependent avatar sizing, docking to terminal geometry, monitor work areas and global shortcuts. Exact tab selection is available for GNOME Terminal through its accessibility metadata; terminal contents are never read. Other recognized terminals can be associated manually at the window level.
+
+On Fedora, install dependencies and then run the installer **as your desktop user**:
+
+```sh
+sudo dnf install python3-tkinter python3-pillow-tk python3-psutil python3-gobject python3-pyatspi gnome-terminal
+python3 scripts/install_linux.py --gnome-extension --autostart
+agentlings on
+```
+
+The installer copies the source application to `~/.local/share/agentlings/app`, adds `~/.local/bin/agentlings` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after installing or updating the extension.** It cannot be loaded into an already running GNOME Shell by restarting only Agentlings. The installer does not end your desktop session or enable Shell unsafe mode. Run `agentlings off` before updating an existing installation.
+
+With the extension available, `agentlings status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. It tries the complete Ctrl+Alt+arrow group, then Ctrl+Alt+Shift+arrows, then Super+Ctrl+Alt+arrows. GNOME commonly reserves the first two groups for workspaces. Conflicting reservations are released before trying another group; existing desktop bindings are never overwritten. Shortcuts work in normal desktop mode, are released when Agentlings stops (including a crashed client), and are not installed permanently in desktop settings. Use the avatar menu if all groups are occupied.
+
+Automatic tab association requires one unique exact tab title and a validated terminal-process ancestor, or a single terminal window with one tab and one CLI client. Multiple candidates remain unbound. For an ambiguous session, right-click its avatar, choose the existing manual binding action, and select its terminal tab within eight seconds. That binding remembers the selected GNOME Terminal tab, so double-clicking the avatar restores the same tab. Closed or replaced tab identities are rejected. Window IDs, process identity and current tab selection are checked before focus; a live CLI is never duplicated just because its window cannot be identified.
+
+Without the extension or optional Python desktop dependencies, Agentlings continues in `portable-beta` mode and reports the missing integration. Native Wayland integration on KDE/wlroots and exact tabs in terminals other than GNOME Terminal are not implemented. Fractional scaling and mixed-scale monitors still require validation; the local walkthrough covered GNOME 50 at 100% scale. Binary release packages remain portable unless built with the optional system desktop modules; the source installation above is the validated integration path.
+
+To disable just the integration:
+
+```sh
+gnome-extensions disable agentlings@agentlings.local
+```
+
+The regression suite and real desktop walkthrough can be run locally:
+
+```sh
+python3 -m unittest discover -s . -p 'test_*.py' -q
+# Additional Fedora test prerequisite:
+sudo dnf install dbus-daemon
+python3 scripts/smoke_linux_desktop.py
+```
+
+The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, global hide/show/placement shortcuts and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
 
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 

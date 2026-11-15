@@ -1,0 +1,7 @@
+{
+  "uuid": "agentlings@agentlings.local",
+  "name": "Agentlings desktop integration",
+  "description": "Terminal focus, window geometry and shortcuts for the local Agentlings companion.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

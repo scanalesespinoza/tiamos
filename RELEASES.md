@@ -49,13 +49,22 @@ downloads; these packages do not change system security settings.
 
 ## Feature coverage
 
+The current source branch also offers optional GNOME integration via
+`python3 scripts/install_linux.py --gnome-extension --autostart`; see the
+[Linux installation and local tests](README.md#linux-gnome-desktop-integration).
+The published beta archives described below retain portable behavior. Source
+integration was exercised locally on GNOME 50/Wayland at 100% scale, including
+real tab selection, focus sizing, minimization/restoration, docking, shortcuts
+and releasing shortcut reservations. Other compositors and fractional scaling
+are not certified by that walkthrough.
+
 | Feature | Windows | Linux / macOS beta |
 | --- | --- | --- |
 | Floating draggable avatars, menus, themes, XP profiles, history | Supported | Supported; desktop placement depends on the window manager |
 | Activity from today's local Codex/Claude logs | Supported | Supported; Claude discovery scans bounded recent metadata every 30 seconds |
 | Notification sounds and volume | Windows audio | macOS `afplay`; Linux `pw-play`, `paplay`, or `aplay` required |
-| Exact terminal tab selection and automatic size/docking | Windows Terminal | Not implemented; avatars remain full size, select the CLI tab manually |
-| Global arrow shortcuts | Supported | Not implemented; use avatar menu placement and group visibility controls |
+| Exact terminal tab selection and automatic size/docking | Windows Terminal | GNOME source integration: GNOME Terminal tabs, focus sizing and docking; portable packages/macOS: manual tab selection |
+| Global arrow shortcuts | Supported | GNOME source integration: collision-aware native shortcuts; portable packages/macOS: use avatar menu |
 | Open/resume closed sessions | Windows Terminal / console | macOS Terminal; Linux x-terminal-emulator, GNOME Terminal, Konsole, XFCE Terminal, or xterm |
 
 The POSIX implementation reads only same-user CLI processes with an attached TTY.
