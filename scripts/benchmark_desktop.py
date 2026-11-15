@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.seconds <= 60:
         parser.error('--seconds must be between 1 and 60')
-    with tempfile.TemporaryDirectory(prefix='agentlings-benchmark-') as folder:
+    with tempfile.TemporaryDirectory(prefix='tiamos-benchmark-') as folder:
         root = Path(folder)
         codex, state = root / 'codex', root / 'state'
         codex.mkdir(); state.mkdir()
@@ -48,10 +48,10 @@ def main():
                 db.execute('INSERT INTO threads VALUES (?,?,?,?,?,0,?,NULL)',
                            (ident, f'Synthetic {index}', str(root), str(trace), 'cli', now.timestamp()))
             db.commit()
-        env = dict(os.environ, AGENTLINGS_STATE_DIR=str(state), CODEX_HOME=str(codex),
-                   CLAUDE_CONFIG_DIR=str(root / 'claude'), AGENTLINGS_DISABLE_DISCOVERY='1')
+        env = dict(os.environ, TIAMOS_STATE_DIR=str(state), CODEX_HOME=str(codex),
+                   CLAUDE_CONFIG_DIR=str(root / 'claude'), TIAMOS_DISABLE_DISCOVERY='1')
         with (root / 'monitor.log').open('w', encoding='utf-8') as log:
-            child = subprocess.Popen([sys.executable, str(ROOT / 'agentlings.py'), 'serve'],
+            child = subprocess.Popen([sys.executable, str(ROOT / 'tiamos.py'), 'serve'],
                                      cwd=ROOT, env=env, stdout=log, stderr=log, **background_options())
             try:
                 deadline = time.monotonic() + 30

@@ -134,7 +134,7 @@ class DetailsCard:
         self.hover_suspended = False
         self.window = tk.Toplevel(root)
         self.window.withdraw()
-        self.window.title('Agentlings · Detalles')
+        self.window.title('tiamos · Detalles')
         self.window.overrideredirect(True)
         self.window.attributes('-topmost', True)
         self.window.configure(bg='#111925', highlightthickness=1, highlightbackground='#537389')

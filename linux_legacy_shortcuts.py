@@ -24,7 +24,7 @@ def clear_owned():
     for action in ACTIONS:
         path = PREFIX + action + '/'
         setting = Gio.Settings.new_with_path(SCHEMA+'.custom-keybinding', path)
-        if setting.get_string('name') == 'Agentlings '+action:
+        if setting.get_string('name') in ('tiamos '+action, 'Agentlings '+action):
             paths = [p for p in paths if p != path]
             for key in ('binding', 'command', 'name'): setting.reset(key)
     parent.set_strv('custom-keybindings', paths)
@@ -52,11 +52,11 @@ class LegacyShortcuts:
             for action, key in ACTIONS.items():
                 path = PREFIX+action+'/'
                 setting = Gio.Settings.new_with_path(SCHEMA+'.custom-keybinding', path)
-                if setting.get_string('name') not in ('', 'Agentlings '+action):
-                    raise RuntimeError('La ruta de atajos de Agentlings pertenece a otra configuración.')
+                if setting.get_string('name') not in ('', 'tiamos '+action, 'Agentlings '+action):
+                    raise RuntimeError('La ruta de atajos de tiamos pertenece a otra configuración.')
                 command = shlex.join([executable, 'emit', '--session', '--object-path', OBJECT,
                     '--signal', INTERFACE+'.Cycle', "'"+action+"'"])
-                for name, value in [('name', 'Agentlings '+action), ('command', command),
+                for name, value in [('name', 'tiamos '+action), ('command', command),
                                     ('binding', '<Control><Alt>'+key)]:
                     if not setting.set_string(name, value):
                         raise RuntimeError('GNOME no permitió configurar los atajos de ubicación.')

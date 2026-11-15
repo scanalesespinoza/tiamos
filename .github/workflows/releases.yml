@@ -14,16 +14,16 @@ jobs:
         include:
           - os: windows-2022
             target: windows-x64
-            executable: agentlings.exe
+            executable: tiamos.exe
           - os: ubuntu-22.04
             target: linux-x64
-            executable: agentlings
+            executable: tiamos
           - os: macos-15
             target: macos-arm64
-            executable: agentlings
+            executable: tiamos
           - os: macos-15-intel
             target: macos-x64
-            executable: agentlings
+            executable: tiamos
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -44,10 +44,10 @@ jobs:
       - run: python scripts/build_release.py
       - name: Packaged desktop smoke (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a python scripts/smoke_release.py dist/agentlings/${{ matrix.executable }}
+        run: xvfb-run -a python scripts/smoke_release.py dist/tiamos/${{ matrix.executable }}
       - name: Packaged desktop smoke (Windows/macOS)
         if: runner.os != 'Linux'
-        run: python scripts/smoke_release.py dist/agentlings/${{ matrix.executable }}
+        run: python scripts/smoke_release.py dist/tiamos/${{ matrix.executable }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
@@ -73,4 +73,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" release/* --verify-tag --prerelease --title "Agentlings $RELEASE_TAG" --notes-file RELEASES.md
+        run: gh release create "$RELEASE_TAG" release/* --verify-tag --prerelease --title "tiamos $RELEASE_TAG" --notes-file RELEASES.md

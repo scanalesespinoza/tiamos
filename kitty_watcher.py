@@ -1,4 +1,4 @@
-"""Start Agentlings' private bridge on Kitty's first window resize."""
+"""Start tiamos' private bridge on Kitty's first window resize."""
 from pathlib import Path
 import time
 

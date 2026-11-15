@@ -34,7 +34,7 @@ def inside():
     assert parent.get_strv('custom-keybindings') == [other]
     # Startup cleanup also removes bindings left without a live receiver.
     stale = Gio.Settings.new_with_path(SCHEMA+'.custom-keybinding', PREFIX+'cycle_next/')
-    stale.set_string('name', 'Agentlings cycle_next')
+    stale.set_string('name', 'tiamos cycle_next')
     parent.set_strv('custom-keybindings', [other, PREFIX+'cycle_next/'])
     clear_owned()
     assert parent.get_strv('custom-keybindings') == [other]

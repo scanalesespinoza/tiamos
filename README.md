@@ -1,8 +1,12 @@
-# Agentlings
+# tiamos
 
 Your CLI agents, at a glance: floating teammates with activity, experience, and gentle notifications.
 
-Formerly **Codex Float**. The command is now `agentlings`; `codex-float` remains a compatibility alias. Existing installations reuse their original state folder and locks, keeping positions, themes, history, and sound preferences. Fresh installations use the `Agentlings` state folder (`agentlings` on Linux). The legacy `CODEX_FLOAT_*` environment settings remain accepted; `AGENTLINGS_*` takes precedence. Repository: [scanalesespinoza/agentlings](https://github.com/scanalesespinoza/agentlings).
+**tiamos** means **team OS**: visible desktop teammates for your local coding agents.
+
+Formerly **Agentlings** and **Codex Float**. Use `tiamos`; `agentlings` and `codex-float` remain compatibility aliases. Existing installations reuse their original state folder and singleton lock, preserving positions, themes, history, sounds and CLI registrations. Fresh installations use `tiamos` on every platform. Environment precedence is `TIAMOS_*`, then `AGENTLINGS_*`, then `CODEX_FLOAT_*`. Repository: [scanalesespinoza/tiamos](https://github.com/scanalesespinoza/tiamos).
+
+For live-session compatibility, the GNOME extension UUID (`agentlings@agentlings.local`), D-Bus interfaces, Kitty socket and optional `agentlings-observer@` service retain their existing internal identifiers. Their visible branding is tiamos. These stable interfaces let an already running desktop and observer continue working during the rename. The Linux installer migrates the generated launchers and desktop/autostart entries, preserves unrelated files, and points Kitty's generated include at `tiamos.conf`.
 
 **Windows, Linux, and macOS release packages:** see [RELEASES.md](RELEASES.md) for downloads, installation, architecture requirements, and the feature matrix. Linux now has optional [GNOME desktop integration](#linux-gnome-desktop-integration) for terminal focus, docking and global shortcuts. Other Linux desktops and macOS retain portable behavior. The Windows-specific workflow below continues to apply to the full Windows integration.
 
@@ -15,18 +19,18 @@ On Fedora, install dependencies and then run the installer **as your desktop use
 ```sh
 sudo dnf install python3-tkinter python3-pillow-tk python3-psutil python3-gobject python3-pyatspi gnome-terminal
 python3 scripts/install_linux.py --gnome-extension --autostart
-agentlings on
+tiamos on
 ```
 
-The installer copies the source application to `~/.local/share/agentlings/app`, adds `~/.local/bin/agentlings` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after first installing the extension.** New extension code loads at the next desktop login; the shortcut update from an already running v1 extension has the live-session compatibility path described below. The installer does not end your desktop session or enable Shell unsafe mode. Run `agentlings off` before updating an existing installation.
+The installer copies the source application to `~/.local/share/tiamos/app`, adds `~/.local/bin/tiamos` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after first installing the extension.** New extension code loads at the next desktop login; the shortcut update from an already running v1 extension has the live-session compatibility path described below. The installer does not end your desktop session or enable Shell unsafe mode. Run `tiamos off` before updating an existing installation.
 
-With the extension available, `agentlings status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. **Ctrl+Alt+Page Down** advances through **top → left → bottom → right → top**; **Ctrl+Alt+Page Up** reverses that cycle. These are **AvPág** and **RePág** on Spanish keyboards. The bottom group is centered above the work-area edge and wraps upward. Both menus expose all four positions and the cycle actions. A placement action regroups manually moved or docked avatars, and the selected position persists across app restarts. Arrow shortcuts are no longer reserved on Linux; visibility remains available from the menu.
+With the extension available, `tiamos status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. **Ctrl+Alt+Page Down** advances through **top → left → bottom → right → top**; **Ctrl+Alt+Page Up** reverses that cycle. These are **AvPág** and **RePág** on Spanish keyboards. The bottom group is centered above the work-area edge and wraps upward. Both menus expose all four positions and the cycle actions. A placement action regroups manually moved or docked avatars, and the selected position persists across app restarts. Arrow shortcuts are no longer reserved on Linux; visibility remains available from the menu.
 
-Version 2 of the extension reserves exactly these two shortcuts, with no modifier fallback. If they are occupied, the app reports it and retains the placement menu. Updating from the already loaded version 1 works immediately without logging out: Agentlings releases its old arrow grabs and temporarily uses two named GNOME custom shortcuts that deliver placement-only D-Bus signals. Unrelated bindings are preserved. Normal shutdown removes these compatibility bindings; startup cleans up any left by a crashed monitor. At the next desktop login, extension v2 provides native grabs with the existing automatic crash cleanup. No desktop restart or Shell unsafe mode is used for this migration.
+Version 2 of the extension reserves exactly these two shortcuts, with no modifier fallback. If they are occupied, the app reports it and retains the placement menu. Updating from the already loaded version 1 works immediately without logging out: tiamos releases its old arrow grabs and temporarily uses two named GNOME custom shortcuts that deliver placement-only D-Bus signals. Unrelated bindings are preserved. Normal shutdown removes these compatibility bindings; startup cleans up any left by a crashed monitor. At the next desktop login, extension v2 provides native grabs with the existing automatic crash cleanup. No desktop restart or Shell unsafe mode is used for this migration.
 
 Automatic tab association requires one unique exact tab title and a validated terminal-process ancestor, or a single terminal window with one tab and one CLI client. Multiple candidates remain unbound. For an ambiguous session, right-click its avatar, choose the existing manual binding action, and select its terminal tab within eight seconds. That binding remembers the selected GNOME Terminal tab, so double-clicking the avatar restores the same tab. Closed or replaced tab identities are rejected. Window IDs, process identity and current tab selection are checked before focus; a live CLI is never duplicated just because its window cannot be identified.
 
-Without the extension or optional Python desktop dependencies, Agentlings continues in `portable-beta` mode and reports the missing integration. Native Wayland integration on KDE/wlroots and exact tabs in terminals other than GNOME Terminal are not implemented. Fractional scaling and mixed-scale monitors still require validation; the local walkthrough covered GNOME 50 at 100% scale. Binary release packages remain portable unless built with the optional system desktop modules; the source installation above is the validated integration path.
+Without the extension or optional Python desktop dependencies, tiamos continues in `portable-beta` mode and reports the missing integration. Native Wayland integration on KDE/wlroots and exact tabs in terminals other than GNOME Terminal are not implemented. Fractional scaling and mixed-scale monitors still require validation; the local walkthrough covered GNOME 50 at 100% scale. Binary release packages remain portable unless built with the optional system desktop modules; the source installation above is the validated integration path.
 
 To disable just the integration:
 
@@ -43,7 +47,7 @@ sudo dnf install dbus-daemon
 python3 scripts/smoke_linux_desktop.py
 # Previous-extension shortcut migration, with private D-Bus and in-memory settings:
 python3 scripts/smoke_legacy_shortcuts.py
-# Live placement keys and persistence (moves avatars and restarts only Agentlings):
+# Live placement keys and persistence (moves avatars and restarts only tiamos):
 python3 scripts/check_live_placement.py
 # Kitty watcher and focus integration (temporary test terminal):
 python3 scripts/smoke_kitty.py
@@ -60,8 +64,8 @@ Ordinary discovery observes the desktop user's CLI processes. A CLI running as r
 ```sh
 # Run from the desktop user's shell, after installing the application:
 sudo python3 scripts/install_observer.py --uid "$(id -u)"
-agentlings off
-agentlings on
+tiamos off
+tiamos on
 ```
 
 The installer copies a root-owned observer and enables `agentlings-observer@<desktop-uid>.service`. It accepts only live elevated CLI processes descended from that user's terminal. Background servers and other users' processes are excluded. Without activity access, companions show **Admin 1**, **Admin 2**, etc., with an explicitly unknown state.
@@ -78,9 +82,9 @@ The activity option grants the root-owned observer read-only access to `/root/.c
 
 The Kitty installer adds a separate config include, a watcher and `Ctrl+Alt+Shift+F12` to start the private bridge. New Kitty windows start it automatically. For an already open Kitty instance, reload its config and press that shortcut once. The bridge receives Kitty's private control FD and exposes only filtered pane identities and focus of an existing pane through a socket restricted to the desktop user. It does not enable general remote control or expose terminal input/output. Exact shell ancestry connects each avatar to its pane; double-click selects it without launching another CLI. This adapter currently requires one Kitty instance with one native window; multiple tabs and split panes are supported, while ambiguous native windows remain unbound.
 
-Set `AGENTLINGS_DISABLE_ELEVATED_OBSERVER=1` to exclude elevated sessions from a monitor (also used to isolate synthetic desktop tests).
+Set `TIAMOS_DISABLE_ELEVATED_OBSERVER=1` to exclude elevated sessions from a monitor (also used to isolate synthetic desktop tests).
 
-Snapshots under `/run/agentlings-observer-<uid>` are root-owned, group-readable, atomically replaced and expire after eight seconds. The consumer rejects writable, redirected, oversized or expired files. `agentlings status` reports observer health separately. Disable it with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
+Snapshots under `/run/agentlings-observer-<uid>` are root-owned, group-readable, atomically replaced and expire after eight seconds. The consumer rejects writable, redirected, oversized or expired files. `tiamos status` reports observer health separately. Disable it with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
 
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
@@ -95,18 +99,18 @@ python -m pip install -r requirements.txt
 .\install.ps1
 ```
 
-The installer writes `agentlings.cmd` into the user's `bin` directory. Keep that directory on PATH. The separately installed npm CLI is preferred. Model, permissions, configuration, and existing hooks are preserved. Normal Codex folder/hook trust prompts still apply; this utility installs no hooks.
+The installer writes `tiamos.cmd` into the user's `bin` directory. Keep that directory on PATH. The separately installed npm CLI is preferred. Model, permissions, configuration, and existing hooks are preserved. Normal Codex folder/hook trust prompts still apply; this utility installs no hooks.
 
 ## Daily use
 
 ```powershell
-agentlings new D:\git\my-project
-agentlings list
-agentlings resume <session-UUID>
-agentlings on
-agentlings off
-agentlings toggle
-agentlings status
+tiamos new D:\git\my-project
+tiamos list
+tiamos resume <session-UUID>
+tiamos on
+tiamos off
+tiamos toggle
+tiamos status
 ```
 
 `new` creates a persistent, named conversation through a short-lived local Codex app-server connection, then opens `codex resume <id>` in its own terminal. Creating the conversation does not submit a prompt or model turn. `resume` opens an existing conversation; if its managed terminal is already alive it activates that window instead. A per-session OS lock prevents concurrent managed CLI owners. Launching a session automatically starts the avatars when necessary. `off` stops only the avatars; terminals and agents keep running.
@@ -124,22 +128,22 @@ Opening a context menu hides the hover card and suspends automatic hover details
 
 ## Colors and live refresh
 
-Provider colors are stored in `%LOCALAPPDATA%\Agentlings\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.
+Provider colors are stored in `%LOCALAPPDATA%\tiamos\themes.json`. Background defaults are dark blue `#24364b` for Codex and dark orange `#493326` for Claude. Text and notice colors automatically adapt to the background unless explicitly overridden. Quote hex colors in PowerShell so `#` is not interpreted as a comment.
 
 ```powershell
-agentlings theme codex --background "#24364b"
-agentlings theme claude --background "#493326"
-agentlings theme codex --foreground "#f1f5f9" --notice "#ffd18a"
-agentlings theme codex --foreground auto --notice auto
-agentlings theme edit
-agentlings refresh
-agentlings theme show
-agentlings theme reset
+tiamos theme codex --background "#24364b"
+tiamos theme claude --background "#493326"
+tiamos theme codex --foreground "#f1f5f9" --notice "#ffd18a"
+tiamos theme codex --foreground auto --notice auto
+tiamos theme edit
+tiamos refresh
+tiamos theme show
+tiamos theme reset
 ```
 
 `theme edit` opens the JSON file in Notepad. Right-click any avatar for **Editar colores globales** or **Recargar colores**. Saved changes reload automatically in about one second, including sprites at both sizes, text, and unread badges. No avatar or CLI restart is needed, and placement, selection, visibility, and personality remain intact. `refresh` validates the file and confirms the running app has applied the palette; when avatars are off, it prepares colors for the next start. `theme reset` restores dark defaults for both providers.
 
-The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `agentlings status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
+The JSON accepts `codex` and `claude` objects, each with optional `background`, `foreground`, and `notice` colors in `#RRGGBB` format. Omit `foreground` and `notice` to use automatic contrast. Missing provider settings use defaults. Invalid JSON, unknown keys, and invalid colors keep the last valid live palette; `tiamos status` reports `theme_error`. Fix and save the file to recover automatically. A cold start with an invalid file uses dark defaults. Custom colors are local preferences and are not committed to Git.
 
 ## Group menu and previous sessions
 
@@ -150,7 +154,7 @@ Its border is mint while any session is working, amber when a working session ex
 - **Ocultar avatares / Mostrar avatares** toggles the whole group. Ctrl+Alt+Down uses the same state; the circle stays visible to restore the group.
 - **Avatares visibles** chooses individual companions. These choices persist across restarts and are preserved while the whole group is hidden.
 - **Mostrar todos los avatares** restores every currently listed companion, clearing their individual hidden choices and the temporary group hide.
-- **Ubicación**, **Modo tranquilo**, **Sonidos**, and **Apagar Agentlings** remain reachable from the group menu even when no avatars are visible. Placement shows the registered shortcuts where supported.
+- **Ubicación**, **Modo tranquilo**, **Sonidos**, and **Apagar tiamos** remain reachable from the group menu even when no avatars are visible. Placement shows the registered shortcuts where supported.
 - **Sesiones anteriores…** opens a searchable list of available local sessions with date, provider, and title. Select a row and choose **Mostrar avatar** (or double-click the row). This adds its avatar without opening or resuming a CLI. Double-click the avatar separately to activate/resume its terminal using the existing live-client safeguards.
 - **Volver a sesiones de hoy** removes explicit historical additions; today's sessions remain. Historical additions persist across restarts until cleared.
 
@@ -162,7 +166,7 @@ The history list is loaded only on request, in a short-lived background worker, 
 
 The caption, details, group summary, inbox and input sounds share the same interpretation of explicit session evidence. A request for your response uses a speech bubble, a tool wait uses an hourglass, an interrupted turn uses a pause symbol, and unavailable activity uses a question mark. Completed turns say **Turno terminado**; completion does not certify the result or its validation. Compact companions use shorter versions of these labels.
 
-Agentlings never infers a need for human input from elapsed time. Missing or stale data does not become completion, interruption or a new request. A known closed terminal remains **CLI cerrado** and can be resumed. The `companions` section in `agentlings status` includes the interpreted `status` alongside the displayed sprite.
+tiamos never infers a need for human input from elapsed time. Missing or stale data does not become completion, interruption or a new request. A known closed terminal remains **CLI cerrado** and can be resumed. The `companions` section in `tiamos status` includes the interpreted `status` alongside the displayed sprite.
 
 The activity card also shows the last observed test/build check, its reported outcome and age, and whether file edits were observed afterward. A tool's reported success does not establish test coverage or certify the current workspace. Unknown outcomes remain unknown. These summaries use the existing fixed activity categories, retain only one check and one edit in memory, and reconstruct from the existing session reader without storing commands or output or launching any checks. Equal timestamps preserve observed event order. The CLI exposes this metadata under `activity.<session>.verification`.
 
@@ -208,7 +212,7 @@ XP is deterministic and shared by both providers:
 
 Action XP is capped at 50 per turn; completion adds up to 10 more. Actions without an observed active turn earn no XP and are excluded from this profile. Previously earned action XP is retained when a turn is interrupted. Level L starts at `50 × L × (L − 1)` total XP: level 2 at 100 XP, level 3 at 300, level 4 at 600. There are no rankings, penalties, or notifications. Volume and tool outcomes are signals for understanding activity, not certification of task quality, correctness, or business impact.
 
-Counters reuse the existing incremental transcript readers. There is no second scan, polling loop, model call, database, or new background process. Memory holds numeric lifetime aggregates plus at most eight local day buckets and bounded recent turn IDs. Restarting rebuilds the same aggregates from the available session transcript; repeated polls do not add the same events again. If logs are removed, truncated, compacted, or unavailable, levels describe the remaining readable history rather than an independent permanent score. Resuming the same session retains the level as long as its history remains available; a new session starts separately. Provider log formats and event coverage can differ, so raw totals are not a fair leaderboard between agents. `agentlings status` includes numeric `statistics`, without commands, tool output, objectives, or result prose.
+Counters reuse the existing incremental transcript readers. There is no second scan, polling loop, model call, database, or new background process. Memory holds numeric lifetime aggregates plus at most eight local day buckets and bounded recent turn IDs. Restarting rebuilds the same aggregates from the available session transcript; repeated polls do not add the same events again. If logs are removed, truncated, compacted, or unavailable, levels describe the remaining readable history rather than an independent permanent score. Resuming the same session retains the level as long as its history remains available; a new session starts separately. Provider log formats and event coverage can differ, so raw totals are not a fair leaderboard between agents. `tiamos status` includes numeric `statistics`, without commands, tool output, objectives, or result prose.
 
 ## Understand each session
 
@@ -238,7 +242,7 @@ Four brief, soft synthesized chimes distinguish a newly completed turn, an obser
 
 Startup, first discovery of a session, and historical records are silent. Only subsequent fresh events notify. Simultaneous events produce one chime, prioritizing intervention, error, level, then completion. Automatic playback is limited to one chime per three seconds, with repeated errors limited to one per session per twenty seconds. Suppressed events are not queued or replayed after unmuting. **Modo tranquilo** also disables the preview until it is turned off.
 
-Playback uses Windows asynchronous audio and short local WAV files generated on demand (at most four files, under 120 KB total). It adds no audio dependency, worker process, or polling timer. `agentlings status` exposes the sound preference, volume, quiet suppression, and any playback error; an unavailable audio device does not stop the avatars.
+Playback uses Windows asynchronous audio and short local WAV files generated on demand (at most four files, under 120 KB total). It adds no audio dependency, worker process, or polling timer. `tiamos status` exposes the sound preference, volume, quiet suppression, and any playback error; an unavailable audio device does not stop the avatars.
 
 Hover over an avatar for a compact detail card without moving keyboard focus away from the terminal. The card shows the project, current objective, working/resting state, turn duration, latest observed activity, and up to three recent tool outcomes. The floating caption summarizes the current observed phase, such as editing, validation, or investigation.
 
@@ -250,7 +254,7 @@ Move the pointer into the card to read it, choose **Fijar** to keep it open, or 
 
 If session updates become unavailable, the card explicitly marks its information as stale and freezes an active turn's observed duration at the last successful update. Historical actions and reported progress remain readable. Normal timing and state return automatically when reading recovers.
 
-Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Fenced code blocks and inline code are omitted from prose previews. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Tool commands, tool output, and reasoning content are never displayed in the card. `agentlings status` includes only fixed activity categories, timestamps, counters, and card state.
+Objective and progress previews are bounded and sanitized locally, retained only in memory, and excluded from runtime status files. Common credential markers cause the whole preview to be omitted; paths, URLs, email addresses, and long opaque identifiers are redacted. Fenced code blocks and inline code are omitted from prose previews. Previews still contain ordinary session prose, so consider what is visible when sharing a screen. Tool commands, tool output, and reasoning content are never displayed in the card. `tiamos status` includes only fixed activity categories, timestamps, counters, and card state.
 
 ## Group placement and global shortcuts
 
@@ -269,7 +273,7 @@ The application registers these global shortcuts only when Windows reports the e
 
 Placement shortcuts reposition all companions on the monitor containing the mouse pointer, reset their manual placements, and keep the group centered and separated. The chosen group position persists. Group placement overrides terminal docking until the next explicit double-click, which can anchor the selected companion to its terminal again. Automatic focus changes preserve the chosen group placement.
 
-If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `agentlings status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
+If any preferred shortcut is already registered, the application releases partial reservations and tries Ctrl+Alt+Shift with the same arrows. `tiamos status` reports the shortcuts actually registered and any registration error. The same three placements are always available from the avatar's context menu. Shortcuts are released when avatars are turned off.
 
 Plain `codex` clients are matched using their live process workspaces and terminal footer metadata. The initial scan inspects inactive tabs once after at least two seconds without user input, then restores the originally selected tab. Later polls inspect the selected tab and reuse validated tab associations. The helper returns only workspace/title metadata and tab identifiers, without saving terminal transcripts or input. Ambiguous matches are left unassigned; the manual binding option remains available for other console hosts. Active unmanaged turns cannot be resumed into a second CLI.
 
@@ -278,8 +282,8 @@ Starting another CLI client or persisting/renaming a conversation automatically 
 ## Continue chats from the desktop app
 
 ```powershell
-agentlings list --all
-agentlings resume <session-UUID>
+tiamos list --all
+tiamos resume <session-UUID>
 ```
 
 Wait for the original turn to finish before moving the conversation to the CLI. Desktop chats are hidden until a live CLI client or launcher registration identifies them. The utility does not close the desktop app or stop its work. WSL sessions in a separate Linux home are not included.
@@ -288,7 +292,7 @@ Wait for the original turn to finish before moving the conversation to the CLI. 
 
 The reader opens `CODEX_HOME/state_5.sqlite` (default `~/.codex`) read-only and incrementally scans referenced lifecycle and activity events every two seconds. It excludes archived threads and subagents. Only bounded, sanitized objective/progress excerpts are retained in memory for the detail card; command output and reasoning content are not retained. Thread names are displayed locally. Database and rollout formats are version-specific; unavailable sources produce an error in `status` rather than a false idle result.
 
-Runtime state lives in `%LOCALAPPDATA%/Agentlings`: positions, window bindings, CLI registrations, per-session locks, heartbeat, startup errors, identity slots, result/acknowledgment timestamps, and the quiet preference. Companion notices store no result text. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
+Runtime state lives in `%LOCALAPPDATA%/tiamos`: positions, window bindings, CLI registrations, per-session locks, heartbeat, startup errors, identity slots, result/acknowledgment timestamps, and the quiet preference. Companion notices store no result text. Managed CLI wrappers write liveness once per second. A stale wrapper is treated as disconnected. Runtime state, credentials, and conversation logs are excluded from this repository.
 
 Before relocating, stop avatars and finish managed CLI sessions, move the repository, then rerun `install.ps1`. No login startup is installed. To uninstall, stop avatars and managed sessions, then remove the launcher and checkout.
 

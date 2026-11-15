@@ -16,8 +16,8 @@ class PlatformTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch('platform_runtime.Path.home', return_value=Path(folder)), \
              patch.dict(os.environ, {'LOCALAPPDATA': folder, 'XDG_STATE_HOME': folder}, clear=True):
             current = state_directory()
-            self.assertIn(current.name, ('Agentlings', 'agentlings'))
-            legacy = current.with_name('CodexFloat' if current.name == 'Agentlings' else 'codex-float')
+            self.assertIn(current.name, ('tiamos',))
+            legacy = current.with_name('CodexFloat' if os.name == 'nt' or sys.platform == 'darwin' else 'codex-float')
             legacy.mkdir(parents=True)
             preference = legacy / 'sounds.json'
             preference.write_text('{"enabled":false,"volume":10}')
@@ -25,13 +25,39 @@ class PlatformTests(unittest.TestCase):
             self.assertEqual(state_directory(), legacy)
             self.assertEqual(json.loads((state_directory()/'sounds.json').read_text())['volume'], 10)
 
-    def test_agentlings_environment_overrides_legacy_names(self):
+    def test_agentlings_preferences_and_lock_remain_shared_after_rename(self):
+        with tempfile.TemporaryDirectory() as folder, patch('platform_runtime.Path.home', return_value=Path(folder)), \
+             patch.dict(os.environ, {'LOCALAPPDATA': folder, 'XDG_STATE_HOME': folder}, clear=True):
+            current = state_directory()
+            old = current.with_name('Agentlings' if os.name == 'nt' or sys.platform == 'darwin' else 'agentlings')
+            old.mkdir(parents=True)
+            (old/'layout.json').write_text('{"mode":"right"}')
+            current.mkdir()
+            self.assertEqual(state_directory(), old)
+            first = lock_file(old/'instance.lock')
+            try:
+                self.assertIsNone(lock_file(state_directory()/'instance.lock'))
+            finally:
+                first.close()
+            self.assertEqual(json.loads((state_directory()/'layout.json').read_text())['mode'], 'right')
+
+    def test_tiamos_environment_takes_precedence_over_agentlings(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
-            'CODEX_FLOAT_STATE_DIR':str(Path(folder)/'legacy'), 'AGENTLINGS_STATE_DIR':str(Path(folder)/'current'),
-            'CODEX_FLOAT_DISABLE_DISCOVERY':'1', 'AGENTLINGS_DISABLE_DISCOVERY':'0'}):
+            'TIAMOS_STATE_DIR':folder+'/new', 'AGENTLINGS_STATE_DIR':folder+'/old',
+            'TIAMOS_DISABLE_DISCOVERY':'0', 'AGENTLINGS_DISABLE_DISCOVERY':'1'}, clear=True):
+            self.assertEqual(state_directory(), Path(folder+'/new').resolve())
+            self.assertTrue(discovery_enabled())
+            os.environ.pop('TIAMOS_STATE_DIR'); os.environ.pop('TIAMOS_DISABLE_DISCOVERY')
+            self.assertEqual(state_directory(), Path(folder+'/old').resolve())
+            self.assertFalse(discovery_enabled())
+
+    def test_tiamos_environment_overrides_legacy_names(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
+            'CODEX_FLOAT_STATE_DIR':str(Path(folder)/'legacy'), 'TIAMOS_STATE_DIR':str(Path(folder)/'current'),
+            'CODEX_FLOAT_DISABLE_DISCOVERY':'1', 'TIAMOS_DISABLE_DISCOVERY':'0'}):
             self.assertEqual(state_directory(), (Path(folder)/'current').resolve())
             self.assertTrue(discovery_enabled())
-            os.environ.pop('AGENTLINGS_DISABLE_DISCOVERY')
+            os.environ.pop('TIAMOS_DISABLE_DISCOVERY')
             self.assertFalse(discovery_enabled())
 
     def test_state_override_and_lock_exclude_duplicate_owner(self):

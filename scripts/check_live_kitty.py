@@ -1,8 +1,8 @@
-"""Check real Agentlings avatars against open elevated Kitty sessions on GNOME.
+"""Check real tiamos avatars against open elevated Kitty sessions on GNOME.
 
 This deliberately double-clicks each avatar, focuses existing panes and restores
 the initial pane/pointer. It never types in terminals or starts/stops agents.
-Run as the desktop user with the installed Agentlings monitor running.
+Run as the desktop user with the installed tiamos monitor running.
 """
 import json
 from pathlib import Path

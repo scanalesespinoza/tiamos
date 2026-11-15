@@ -17,7 +17,7 @@ from kitty_bridge import request
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix='agentlings-kitty-') as folder:
+    with tempfile.TemporaryDirectory(prefix='tiamos-kitty-') as folder:
         folder = Path(folder); runtime = folder/'runtime'; runtime.mkdir(mode=0o700)
         config = folder/'kitty.conf'; config.write_text(f'linux_display_server x11\nwatcher {ROOT}/kitty_watcher.py\n')
         session = folder/'session'; session.write_text('launch sleep 90\nnew_tab\nlaunch sleep 90\n')

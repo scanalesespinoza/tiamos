@@ -26,7 +26,7 @@ class AttentionWindow:
     def _build(self):
         self.window = tk.Toplevel(self.root)
         self.window.withdraw()
-        self.window.title('Necesita tu atención · Agentlings')
+        self.window.title('Necesita tu atención · tiamos')
         self.window.geometry('680x330')
         self.window.minsize(520, 250)
         self.window.attributes('-topmost', True)
