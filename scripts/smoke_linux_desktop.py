@@ -122,7 +122,7 @@ def inside(folder):
         run([*app, 'on'])
         def status():
             return json.loads(run([*app, 'status']).stdout)
-        data = until(lambda: (s if (s := status()).get('chats') == 2 and len(s.get('hotkeys', {})) == 4 else None),
+        data = until(lambda: (s if (s := status()).get('chats') == 2 and len(s.get('hotkeys', {})) == 2 else None),
                      'Monitor did not discover sessions/register shortcuts')
         assert data['capabilities']['desktop_mode'] == 'gnome'
         for index, record in enumerate(records):
@@ -133,15 +133,20 @@ def inside(folder):
             assert data['sizes'][identities[1-index]] == [89, 76]
         # Use the advertised bindings, including the conflict fallback group.
         keysyms = {'Super': 0xffeb, 'Ctrl': 0xffe3, 'Alt': 0xffe9, 'Shift': 0xffe1,
-                   'Up': 0xff52, 'Down': 0xff54, 'Left': 0xff51, 'Right': 0xff53}
+                   'Page_Up': 0xff55, 'Page_Down': 0xff56}
         def shortcut(action):
             keys([keysyms[part] for part in data['hotkeys'][action].split('+')])
-        shortcut('right')
-        until(lambda: status().get('layout') == 'right', 'Placement shortcut failed')
-        shortcut('toggle_visibility')
-        until(lambda: status().get('hidden') is True, 'Hide shortcut failed')
-        shortcut('toggle_visibility')
-        until(lambda: status().get('hidden') is False, 'Show shortcut failed')
+        assert data['hotkeys'] == {'cycle_next': 'Ctrl+Alt+Page_Down', 'cycle_previous': 'Ctrl+Alt+Page_Up'}
+        for action, modes in [('cycle_next', ('left', 'bottom', 'top')),
+                              ('cycle_previous', ('bottom', 'left', 'top'))]:
+            for mode in modes:
+                shortcut(action)
+                until(lambda: status().get('layout') == mode, 'Placement cycle failed: '+mode)
+                if mode == 'bottom':
+                    placed = status()
+                    bottom = placed['layout_area'][3]
+                    assert all(placed['windows'][ident][1]+placed['sizes'][ident][1] == bottom-12
+                               for ident in identities), 'Bottom layout is not aligned with work area'
         # Double-click the active avatar with XTest on the isolated XWayland display.
         import ctypes
         x11, xtst = ctypes.CDLL('libX11.so.6'), ctypes.CDLL('libXtst.so.6')
@@ -179,21 +184,21 @@ def inside(folder):
         until(lambda: status().get('capabilities', {}).get('desktop_mode') == 'portable-beta',
               'Unavailable extension left stale capability claims')
         run(['gsettings', 'set', 'org.gnome.shell', 'enabled-extensions', "['agentlings@agentlings.local']"])
-        until(lambda: status().get('capabilities', {}).get('desktop_mode') == 'gnome' and len(status().get('hotkeys', {})) == 4,
+        until(lambda: status().get('capabilities', {}).get('desktop_mode') == 'gnome' and len(status().get('hotkeys', {})) == 2,
               'Monitor did not recover its desktop integration')
         run([*app, 'off'])
         owner = DesktopBridge(); owner.want_shortcuts = True
-        assert len(owner.refresh(force=True)['labels']) == 4, 'Shortcuts not released on shutdown'
+        assert len(owner.refresh(force=True)['labels']) == 2, 'Shortcuts not released on shutdown'
         owner.close()
         crash = subprocess.Popen([sys.executable, '-c',
             'import time; from linux_desktop import DesktopBridge; b=DesktopBridge(); '
             'b.want_shortcuts=True; print(len(b.refresh(force=True)["labels"]), flush=True); time.sleep(60)'],
             cwd=ROOT, stdout=subprocess.PIPE, stderr=log, text=True)
         processes.append(crash)
-        assert crash.stdout.readline().strip() == '4'
+        assert crash.stdout.readline().strip() == '2'
         crash.kill(); crash.wait(timeout=5); crash.stdout.close()
         replacement = DesktopBridge(); replacement.want_shortcuts = True
-        until(lambda: len(replacement.refresh(force=True).get('labels', {})) == 4, 'Crash left shortcut reservations')
+        until(lambda: len(replacement.refresh(force=True).get('labels', {})) == 2, 'Crash left shortcut reservations')
         replacement.close()
         call(remote, session, iface, 'Stop')
         print(json.dumps({'gnome_wayland': True, 'exact_tabs': True, 'focus_sizing': True,

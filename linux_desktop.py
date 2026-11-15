@@ -58,7 +58,7 @@ class DesktopBridge:
             elif self.attached:
                 self.labels = data.get('labels', {})
             for event in data.get('events', []):
-                if event in ('top', 'left', 'right', 'toggle_visibility'):
+                if event in ('top', 'left', 'right', 'toggle_visibility', 'cycle_next', 'cycle_previous'):
                     self.events.put(event)
             self.data, self.available, self.error = data, True, data.get('error')
         except Exception:
@@ -134,23 +134,45 @@ class LinuxWindows(PortableWindows):
 
 class LinuxHotkeys:
     def __init__(self):
+        self.legacy = None
+        self.compatibility_error = None
         self.bridge = bridge()
         self.events = self.bridge.events
         # Synthetic monitors must never reserve the real user's shortcuts.
         from platform_runtime import discovery_enabled
         self.bridge.want_shortcuts = discovery_enabled()
+        if self.bridge.want_shortcuts:
+            try:
+                from linux_legacy_shortcuts import clear_owned
+                clear_owned()
+            except Exception:
+                pass
         self.bridge.refresh(force=True)
+        if self.bridge.attached and 'top' in self.bridge.labels:
+            # Release v1 arrow grabs before adding the requested Page keys.
+            self.bridge.call('Detach')
+            self.bridge.want_shortcuts = self.bridge.attached = False
+            self.bridge.labels = {}
+            try:
+                from linux_legacy_shortcuts import LegacyShortcuts
+                self.legacy = LegacyShortcuts(self.bridge.connection, self.events)
+            except Exception as error:
+                self.compatibility_error = str(error)
 
     @property
     def labels(self):
-        return self.bridge.labels
+        return self.legacy.labels if self.legacy else self.bridge.labels
 
     @property
     def error(self):
-        return self.bridge.error
+        return self.compatibility_error or self.bridge.error
 
     def poll(self):
+        if self.legacy:
+            self.legacy.poll()
         self.bridge.refresh()
 
     def close(self):
+        if self.legacy:
+            self.legacy.close()
         self.bridge.close()

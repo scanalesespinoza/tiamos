@@ -18,9 +18,11 @@ python3 scripts/install_linux.py --gnome-extension --autostart
 agentlings on
 ```
 
-The installer copies the source application to `~/.local/share/agentlings/app`, adds `~/.local/bin/agentlings` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after installing or updating the extension.** It cannot be loaded into an already running GNOME Shell by restarting only Agentlings. The installer does not end your desktop session or enable Shell unsafe mode. Run `agentlings off` before updating an existing installation.
+The installer copies the source application to `~/.local/share/agentlings/app`, adds `~/.local/bin/agentlings` and a desktop launcher, and preserves the existing runtime preferences. `--autostart` is optional. The extension is installed under `~/.local/share/gnome-shell/extensions/agentlings@agentlings.local`; existing enabled extensions are preserved. **Log out and back in once after first installing the extension.** New extension code loads at the next desktop login; the shortcut update from an already running v1 extension has the live-session compatibility path described below. The installer does not end your desktop session or enable Shell unsafe mode. Run `agentlings off` before updating an existing installation.
 
-With the extension available, `agentlings status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. It tries the complete Ctrl+Alt+arrow group, then Ctrl+Alt+Shift+arrows, then Super+Ctrl+Alt+arrows. GNOME commonly reserves the first two groups for workspaces. Conflicting reservations are released before trying another group; existing desktop bindings are never overwritten. Shortcuts work in normal desktop mode, are released when Agentlings stops (including a crashed client), and are not installed permanently in desktop settings. Use the avatar menu if all groups are occupied.
+With the extension available, `agentlings status` reports `capabilities.desktop_mode: "gnome"` and actual registered shortcuts. **Ctrl+Alt+Page Down** advances through **top → left → bottom → top**; **Ctrl+Alt+Page Up** reverses that cycle. These are **AvPág** and **RePág** on Spanish keyboards. The bottom group is centered above the work-area edge and wraps upward. Both menus expose all three positions and the cycle actions. A placement action regroups manually moved or docked avatars, and the selected position persists across app restarts. Arrow shortcuts are no longer reserved on Linux; visibility remains available from the menu.
+
+Version 2 of the extension reserves exactly these two shortcuts, with no modifier fallback. If they are occupied, the app reports it and retains the placement menu. Updating from the already loaded version 1 works immediately without logging out: Agentlings releases its old arrow grabs and temporarily uses two named GNOME custom shortcuts that deliver placement-only D-Bus signals. Unrelated bindings are preserved. Normal shutdown removes these compatibility bindings; startup cleans up any left by a crashed monitor. At the next desktop login, extension v2 provides native grabs with the existing automatic crash cleanup. No desktop restart or Shell unsafe mode is used for this migration.
 
 Automatic tab association requires one unique exact tab title and a validated terminal-process ancestor, or a single terminal window with one tab and one CLI client. Multiple candidates remain unbound. For an ambiguous session, right-click its avatar, choose the existing manual binding action, and select its terminal tab within eight seconds. That binding remembers the selected GNOME Terminal tab, so double-clicking the avatar restores the same tab. Closed or replaced tab identities are rejected. Window IDs, process identity and current tab selection are checked before focus; a live CLI is never duplicated just because its window cannot be identified.
 
@@ -39,13 +41,17 @@ python3 -m unittest discover -s . -p 'test_*.py' -q
 # Additional Fedora test prerequisite:
 sudo dnf install dbus-daemon
 python3 scripts/smoke_linux_desktop.py
+# Previous-extension shortcut migration, with private D-Bus and in-memory settings:
+python3 scripts/smoke_legacy_shortcuts.py
+# Live placement keys and persistence (moves avatars and restarts only Agentlings):
+python3 scripts/check_live_placement.py
 # Kitty watcher and focus integration (temporary test terminal):
 python3 scripts/smoke_kitty.py
 # Real avatar double-clicks; requires running monitor and at least two bound Kitty sessions:
 python3 scripts/check_live_kitty.py
 ```
 
-The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, global hide/show/placement shortcuts and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
+The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, both complete placement cycles, bottom alignment and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
 
 ### Agents running through sudo or su
 

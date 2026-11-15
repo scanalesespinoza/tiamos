@@ -67,7 +67,7 @@ def main():
             if not settings.set_strv('enabled-extensions', [*enabled, UUID]):
                 raise SystemExit('GNOME extension settings are not writable.')
         Gio.Settings.sync()
-        print('GNOME extension installed. Log out and back in to load new extension code.')
+        print('GNOME extension installed; new code loads at the next desktop login. Existing v1 placement shortcuts update without logout.')
     print(f'Installed: {launcher}\nStart with: agentlings on')
 
 

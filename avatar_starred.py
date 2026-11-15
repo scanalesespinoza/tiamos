@@ -24,24 +24,26 @@ def marker_size(size):
 def footprint(size, anchor, marked):
     width, height = size
     extent = marker_size(size) + GAP if marked else 0
-    return (width, height + extent) if anchor == 'top' else (width + extent, height)
+    return (width, height + extent) if anchor in ('top', 'bottom') else (width + extent, height)
 
 
 def avatar_origin(x, y, size, anchor, marked):
-    return (x + marker_size(size) + GAP if marked and anchor == 'right' else x, y)
+    return (x + marker_size(size) + GAP if marked and anchor == 'right' else x,
+            y + marker_size(size) + GAP if marked and anchor == 'bottom' else y)
 
 
 def occupied_rect(rect, anchor, marked):
     x, y, width, height = rect
     extent = marker_size((width, height)) + GAP if marked and anchor == 'right' else 0
-    return (x - extent, y, *footprint((width, height), anchor, marked))
+    vertical = marker_size((width, height)) + GAP if marked and anchor == 'bottom' else 0
+    return (x - extent, y - vertical, *footprint((width, height), anchor, marked))
 
 
 def marker_rect(rect, anchor):
     x, y, width, height = rect
     size = marker_size((width, height))
-    if anchor == 'top':
-        return x + (width - size) // 2, y + height + GAP, size, size
+    if anchor in ('top', 'bottom'):
+        return x + (width - size) // 2, y - size - GAP if anchor == 'bottom' else y + height + GAP, size, size
     return (x - size - GAP if anchor == 'right' else x + width + GAP,
             y + (height - size) // 2, size, size)
 

@@ -1,18 +1,18 @@
 import unittest
-from avatar_layout import arrange, register_available, menu_after
+from avatar_layout import cycle_position, arrange, register_available, menu_after
 
 
 class LayoutTests(unittest.TestCase):
     def test_group_control_packs_last_and_survives_an_empty_group(self):
-        for anchor in ('top', 'right', 'left'):
+        for anchor in ('top', 'right', 'left', 'bottom'):
             packed = arrange([('a', 178, 152), ('menu', 36, 36)], (0, 0, 800, 600), anchor)
-            axis = 0 if anchor == 'top' else 1
+            axis = 0 if anchor in ('top', 'bottom') else 1
             self.assertGreater(packed['menu'][axis], packed['a'][axis])
             self.assertIn('menu', arrange([('menu', 36, 36)], (0, 0, 800, 600), anchor))
 
     def test_control_follows_manual_avatars_without_covering_them(self):
         rectangles = [(300, 200, 178, 152), (600, 500, 178, 76)]
-        for anchor in ('top', 'left', 'right'):
+        for anchor in ('top', 'left', 'right', 'bottom'):
             x, y = menu_after(rectangles, (0, 0, 800, 600), anchor)
             self.assertTrue(0 <= x <= 764 and 0 <= y <= 564)
             self.assertTrue(all(not (x < ox + w and x + 36 > ox and y < oy + h and y + 36 > oy)
@@ -36,7 +36,7 @@ class LayoutTests(unittest.TestCase):
 
     def test_wrapping_stays_inside_work_area_without_overlap(self):
         items = [(str(i), 178, 152) for i in range(10)]
-        for mode in ('top', 'left', 'right'):
+        for mode in ('top', 'left', 'right', 'bottom'):
             area = (0, 40, 1440, 940)
             result = arrange(items, area, mode)
             rectangles = [(x, y, x + 178, y + 152) for x, y in result.values()]
@@ -47,6 +47,23 @@ class LayoutTests(unittest.TestCase):
                 self.assertLessEqual(bottom, area[3])
                 for other in rectangles[index + 1:]:
                     self.assertFalse(left < other[2] and right > other[0] and top < other[3] and bottom > other[1])
+
+    def test_page_cycle_wraps_both_directions(self):
+        current = 'top'
+        for direction, sequence in ((1, ('left', 'bottom', 'top')), (-1, ('bottom', 'left', 'top'))):
+            for expected in sequence:
+                current = cycle_position(current, direction)
+                self.assertEqual(current, expected)
+
+    def test_bottom_aligns_mixed_sizes_and_wraps_upward_on_offset_monitor(self):
+        area = (-1000, 40, 0, 900)
+        items = [('a', 178, 152), ('b', 89, 76), ('menu', 36, 36)]
+        positions = arrange(items, area, 'bottom')
+        for ident, width, height in items:
+            self.assertEqual(positions[ident][1] + height, 888)
+        self.assertLessEqual(abs(positions['a'][0] + positions['menu'][0] + 36 + 1000), 1)
+        wrapped = arrange([('a', 178, 152), ('b', 178, 152)], (-300, 40, 0, 900), 'bottom')
+        self.assertLess(wrapped['b'][1] + 152, wrapped['a'][1])
 
     def test_busy_hotkey_group_is_released_before_fallback(self):
         released = []

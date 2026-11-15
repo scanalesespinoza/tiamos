@@ -11,7 +11,7 @@ const IFACE = `<node><interface name="org.agentlings.Desktop1">
 <method name="Attach"><arg type="s" direction="out"/></method>
 <method name="Detach"/>
 </interface></node>`;
-const KEYS = [['top', 'Up'], ['right', 'Right'], ['left', 'Left'], ['toggle_visibility', 'Down']];
+const KEYS = [['cycle_next', 'Page_Down'], ['cycle_previous', 'Page_Up']];
 const TERMINALS = new Set(['org.gnome.Terminal', 'org.gnome.Ptyxis', 'org.gnome.Console',
     'org.kde.konsole', 'kitty', 'Alacritty', 'com.mitchellh.ghostty', 'xfce4-terminal', 'xterm']);
 
@@ -97,11 +97,7 @@ export default class Agentlings extends Extension {
                 Gio.BusNameWatcherFlags.NONE, null, () => this._detach());
         }
         this._release();
-        const groups = [
-            ['<Control><Alt>', 'Ctrl+Alt'],
-            ['<Control><Alt><Shift>', 'Ctrl+Alt+Shift'],
-            ['<Super><Control><Alt>', 'Super+Ctrl+Alt'],
-        ];
+        const groups = [['<Control><Alt>', 'Ctrl+Alt']];
         for (const [modifiers, label] of groups) {
             for (const [name, key] of KEYS) {
                 const accelerator = `${modifiers}${key}`;

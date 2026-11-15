@@ -21,12 +21,14 @@ class StarredLayoutTests(unittest.TestCase):
     def test_markers_face_inward_at_both_sizes_and_negative_monitor_coordinates(self):
         for width, height in ((178, 152), (89, 76)):
             avatar = (-900, 50, width, height)
-            for anchor in ('top', 'left', 'right'):
+            for anchor in ('top', 'left', 'right', 'bottom'):
                 x, y, w, h = marker_rect(avatar, anchor)
                 self.assertFalse(overlaps(avatar, (x, y, w, h)))
                 if anchor == 'top':
                     self.assertGreater(y, avatar[1] + height)
                     self.assertLessEqual(abs((x + w / 2) - (avatar[0] + width / 2)), .5)
+                elif anchor == 'bottom':
+                    self.assertLess(y + h, avatar[1])
                 elif anchor == 'right':
                     self.assertLess(x + w, avatar[0])
                 else:
@@ -35,7 +37,7 @@ class StarredLayoutTests(unittest.TestCase):
     def test_wrapped_mixed_sizes_reserve_space_for_markers(self):
         area = (-900, 40, 0, 800)
         sizes = {str(i): (178, 152) if i % 2 else (89, 76) for i in range(9)}
-        for anchor in ('top', 'left', 'right'):
+        for anchor in ('top', 'left', 'right', 'bottom'):
             packed = arrange([(key, *footprint(size, anchor, True)) for key, size in sizes.items()], area, anchor)
             rectangles = []
             for key, point in packed.items():

@@ -42,14 +42,15 @@ class LinuxDesktopTests(unittest.TestCase):
     def test_reconnect_attaches_once_and_delivers_only_known_events(self):
         bridge = DesktopBridge()
         bridge.want_shortcuts = True
-        replies = [(json.dumps({'version': 1, 'events': ['top', 'arbitrary']}),),
+        replies = [(json.dumps({'version': 1, 'events': ['cycle_next', 'cycle_previous', 'arbitrary']}),),
                    (json.dumps({'labels': {'top': 'Ctrl+Alt+Up'}, 'error': None}),),
                    (json.dumps({'version': 1, 'events': [], 'labels': {'top': 'Ctrl+Alt+Up'}}),)]
         with patch.object(bridge, 'call', side_effect=replies) as call:
             bridge.refresh(force=True)
             bridge.refresh(force=True)
         self.assertEqual([c.args[0] for c in call.call_args_list], ['Snapshot', 'Attach', 'Snapshot'])
-        self.assertEqual(bridge.events.get_nowait(), 'top')
+        self.assertEqual(bridge.events.get_nowait(), 'cycle_next')
+        self.assertEqual(bridge.events.get_nowait(), 'cycle_previous')
         self.assertTrue(bridge.events.empty())
 
     def test_activation_revalidates_process_identity(self):

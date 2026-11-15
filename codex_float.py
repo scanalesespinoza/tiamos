@@ -14,7 +14,7 @@ import threading
 import time
 from window_focus import Windows, WindowSnapshot, FULL_SIZE, HALF_SIZE, avatar_size, dock_position, foreground_selection
 from cli_sessions import registrations, create_session, launch, thread_info
-from avatar_layout import arrange, GlobalHotkeys, monitor_work_area, place_companion
+from avatar_layout import PLACEMENTS, cycle_position, arrange, GlobalHotkeys, monitor_work_area, place_companion
 from session_activity import Activity, safe_preview
 from session_status import status_code
 from avatar_theme import DEFAULTS, ThemeSettings, palettes, read_config, write_config
@@ -239,7 +239,7 @@ def serve():
     selection_epoch = 0
     layout_path = STATE / 'layout.json'
     layout = load_json(layout_path, {'mode': 'top', 'manual': [], 'order': []})
-    if layout.get('mode') not in ('top', 'right', 'left'):
+    if layout.get('mode') not in dict(PLACEMENTS):
         layout['mode'] = 'top'
     manual_ids = set(layout.get('manual', []))
     layout_order = list(layout.get('order', []))
@@ -287,6 +287,8 @@ def serve():
     def apply_layout(anchor):
         nonlocal layout_area, follow_selection
         details.hide()
+        if anchor in ('cycle_next', 'cycle_previous'):
+            anchor = cycle_position(layout['mode'], 1 if anchor == 'cycle_next' else -1)
         layout['mode'] = anchor
         layout_area = monitor_work_area()
         follow_selection = False
@@ -607,8 +609,11 @@ def serve():
         appearance_menu.add_separator()
         appearance_menu.add_command(label='Restablecer aspecto automático', command=lambda: change_appearance(reset=True))
         menu.add_cascade(label='Personalizar compañero', menu=appearance_menu)
-        for anchor, placement_label in [('top', 'Arriba centro'), ('right', 'Derecha centro'), ('left', 'Izquierda centro')]:
+        for anchor, placement_label in PLACEMENTS:
             menu.add_command(label=placement_label, accelerator=hotkeys.labels.get(anchor, ''), command=lambda mode=anchor: apply_layout(mode))
+        for action, text in [('cycle_next', 'Siguiente ubicación'), ('cycle_previous', 'Ubicación anterior')]:
+            if action in hotkeys.labels:
+                menu.add_command(label=text, accelerator=hotkeys.labels[action], command=lambda mode=action: apply_layout(mode))
         menu.add_separator()
         menu.add_checkbutton(label='Modo tranquilo', variable=quiet, command=save_quiet)
         sound_menu = SoundMenu(menu, sounds, quiet.get)
