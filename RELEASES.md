@@ -90,6 +90,11 @@ tests; it is not intended for normal CLI monitoring.
 
 ## Build and publish
 
+Pull requests build and smoke-test every platform without retaining downloadable
+artifacts. Tagged releases and manual workflow runs retain their packages. This
+keeps validation independent of artifact-storage quota while preserving release
+uploads as a required step for publishing.
+
 Build **on each target OS** with Python 3.12 and Tk:
 
 ```sh
