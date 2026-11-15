@@ -26,7 +26,21 @@ class ObserverTests(unittest.TestCase):
         data = collect(1000, [accepted, *rejected], now=100)
         self.assertEqual([row['pid'] for row in data['sessions']], [20])
         self.assertEqual(set(data['sessions'][0]),
-            {'pid', 'created_at', 'provider', 'terminal_pid', 'terminal_created_at'})
+            {'pid', 'created_at', 'provider', 'terminal_pid', 'terminal_created_at', 'shell_pid'})
+
+    def test_shell_identity_comes_from_direct_terminal_child(self):
+        terminal = process(10, uid=1000, name='kitty')
+        shell = process(11, uid=1000, name='bash')
+        root_shell = process(12, name='bash')
+        row = describe(process(parents=[root_shell, shell, terminal]), 1000)
+        self.assertEqual(row['shell_pid'], 11)
+
+    def test_malformed_activity_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = self.data()
+            data['sessions'][0]['chat'] = {'state': 'working'}
+            with self.assertRaises(ValueError):
+                self.load(self.write(folder, data))
 
     def write(self, folder, data):
         path = Path(folder)/'sessions.json'

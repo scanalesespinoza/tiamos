@@ -234,7 +234,7 @@ def main():
                      'AGENTLINGS_DISABLE_DISCOVERY', 'CODEX_FLOAT_DISABLE_DISCOVERY'):
             env.pop(name, None)
         env.update(XDG_RUNTIME_DIR=str(folder/'runtime'), XDG_CONFIG_HOME=str(folder/'config'),
-            XDG_DATA_HOME=str(folder/'share'), GSETTINGS_BACKEND='keyfile',
+            XDG_DATA_HOME=str(folder/'share'), GSETTINGS_BACKEND='keyfile', AGENTLINGS_DISABLE_ELEVATED_OBSERVER='1',
             XDG_CURRENT_DESKTOP='GNOME', LIBGL_ALWAYS_SOFTWARE='1', AGENTLINGS_PRIVATE_DESKTOP_TEST=str(folder))
         # No automatic service directories: tests must not start the operator's
         # online accounts, keyring, FUSE mounts or other desktop services.

@@ -1,14 +1,15 @@
-"""Opt-in, metadata-only observation of elevated CLI children of a desktop user.
+"""Opt-in, bounded observation of elevated CLI children of a desktop user.
 
 The privileged service runs a root-owned copy of this standalone module. It
-reads process identities and ancestry only: no transcripts, environment,
-arguments, credentials, model calls, terminal contents or launch commands.
+reads process identities and ancestry, plus sanitized activity from matched
+Codex rollouts when explicitly enabled. No terminal text or environment is exported.
 """
 import argparse
 import json
 import os
 from pathlib import Path
 import stat
+import sqlite3
 import tempfile
 import time
 
@@ -31,11 +32,14 @@ def describe(process, desktop_uid):
         provider = process.name().lower()
         if provider not in ('codex', 'claude') or process.uids().real != 0 or not process.terminal():
             return None
-        terminal = next((parent for parent in process.parents()[:32]
+        parents = process.parents()[:32]
+        terminal = next((parent for parent in parents
                          if parent.uids().real == desktop_uid and parent.name().lower() in TERMINALS), None)
         if terminal is None:
             return None
-        return {'pid': process.pid, 'created_at': process.create_time(), 'provider': provider,
+        index = next(i for i, parent in enumerate(parents) if parent.pid == terminal.pid)
+        shell = parents[index-1] if index else process
+        return {'shell_pid': shell.pid, 'pid': process.pid, 'created_at': process.create_time(), 'provider': provider,
                 'terminal_pid': terminal.pid, 'terminal_created_at': terminal.create_time()}
     except (psutil.Error, OSError):
         return None
@@ -112,12 +116,21 @@ def load_feed(path, uid, now=None, trusted_uid=0):
             raise ValueError('Duplicate process identity')
         seen.add(ident)
         # Keep IDs stable across polls, including when process numbers are reused.
-        result.append({'id': ident, 'provider': row['provider'], 'state': 'unknown',
+        chat = {'id': ident, 'provider': row['provider'], 'state': 'unknown',
             'title': f"Admin {len(result)+1}",
             'project': 'Sesión elevada', 'activity': {},
             'terminal': {'kind': 'unbound', 'live': True, 'elevated': True,
                          'cli_pid': row['pid'], 'created_at': row['created_at'],
-                         'terminal_pid': row['terminal_pid'], 'terminal_created_at': row['terminal_created_at']}})
+                         'terminal_pid': row['terminal_pid'], 'terminal_created_at': row['terminal_created_at'],
+                         'shell_pid': row.get('shell_pid')}}
+        activity = row.get('chat')
+        if activity is not None:
+            if (not isinstance(activity, dict) or activity.get('state') not in ('working', 'sleeping')
+                    or not all(isinstance(activity.get(k), str) and len(activity[k]) <= 100 for k in ('id', 'title', 'project'))
+                    or not isinstance(activity.get('activity'), dict)):
+                raise ValueError('Invalid activity summary')
+            chat.update({k: activity[k] for k in ('id', 'title', 'project', 'state', 'activity')})
+        result.append(chat)
     return result
 
 
@@ -129,6 +142,11 @@ class ElevatedSessions:
     def snapshot(self):
         try:
             rows = load_feed(feed_path(self.uid), self.uid)
+            from linux_desktop import LinuxWindows
+            from kitty_tabs import match_terminal
+            windows = LinuxWindows().all_terminal_windows()
+            for chat in rows:
+                chat['terminal'].update(match_terminal(chat['terminal'], windows))
             self.status = {'enabled': True, 'sessions': len(rows), 'error': None}
             return rows
         except FileNotFoundError:
@@ -141,14 +159,28 @@ class ElevatedSessions:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--uid', required=True, type=int)
+    parser.add_argument('--activity', action='store_true', help='Read matched local Codex activity')
     parser.add_argument('--once', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0 or args.uid <= 0:
         parser.error('A root service and a non-root desktop UID are required.')
     import pwd
     account = pwd.getpwuid(args.uid)
+    activity = None
+    if args.activity:
+        # Only the root-owned installed bundle is imported under Python -I.
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from elevated_activity import CodexActivity
+        activity = CodexActivity()
     while True:
-        write_feed(feed_path(args.uid), collect(args.uid), account.pw_gid)
+        data = collect(args.uid)
+        if activity:
+            try:
+                activity.enrich(data['sessions'])
+            except (OSError, ValueError, sqlite3.Error):
+                pass
+        write_feed(feed_path(args.uid), data, account.pw_gid)
         if args.once:
             return
         time.sleep(2)

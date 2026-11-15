@@ -39,6 +39,10 @@ python3 -m unittest discover -s . -p 'test_*.py' -q
 # Additional Fedora test prerequisite:
 sudo dnf install dbus-daemon
 python3 scripts/smoke_linux_desktop.py
+# Kitty watcher and focus integration (temporary test terminal):
+python3 scripts/smoke_kitty.py
+# Real avatar double-clicks; requires running monitor and at least two bound Kitty sessions:
+python3 scripts/check_live_kitty.py
 ```
 
 The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, global hide/show/placement shortcuts and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
@@ -54,11 +58,23 @@ agentlings off
 agentlings on
 ```
 
-The installer copies a standalone observer into a root-owned system directory and enables `agentlings-observer@<desktop-uid>.service`. It exports only live `codex` and `claude` process IDs, creation times, provider names and terminal ancestry for that desktop UID. A root CLI must descend from the user's live terminal process; unrelated root agents, background servers, other users' terminals and ordinary shells are excluded. Kitty is supported for this process discovery, including existing elevated tabs; exact Kitty tab selection is still unavailable.
+The installer copies a root-owned observer and enables `agentlings-observer@<desktop-uid>.service`. It accepts only live elevated CLI processes descended from that user's terminal. Background servers and other users' processes are excluded. Without activity access, companions show **Admin 1**, **Admin 2**, etc., with an explicitly unknown state.
 
-These companions are named **Admin 1**, **Admin 2**, etc., in process-start order. They show **Sin estado disponible**, because a live CLI process does not prove whether a turn is working, waiting or completed. The observer does not read root conversation databases, transcripts, credentials, command arguments, environment or terminal contents, and cannot launch elevated commands. Double-click does not resume an administrative CLI. Select its existing terminal tab to interact with it. Avatars disappear when their CLI processes exit.
+For Codex clients running as root, opt into sanitized local activity and Kitty pane focus:
 
-The graphical app remains under the desktop user. The service reads process metadata every two seconds and writes an atomic snapshot under `/run/agentlings-observer-<uid>`, owned by root and readable by the user's primary group. The reader rejects writable, redirected, oversized or expired snapshots; observations expire after eight seconds. Nothing is copied from `/root` or made readable there. `agentlings status` reports `elevated_observer` separately from normal session activity. Disable the optional observer with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
+```sh
+# Run as the desktop user:
+python3 scripts/install_linux.py --autostart --kitty
+sudo python3 scripts/install_observer.py --uid "$(id -u)" --activity
+```
+
+The activity option grants the root-owned observer read-only access to `/root/.codex` inside its service sandbox. For shared-server Codex clients, it correlates the latest substantial assistant text logged by each process with exactly one conversation. It then uses the normal incremental lifecycle reader for titles, activity, completion, XP and statistics. Matching is bounded and version-dependent; absent, ambiguous or insufficient recent evidence stays unknown. It never guesses a chat from its working directory. Raw transcripts, terminal text, environment, arguments and credentials are not exported. The desktop GUI stays unprivileged. Elevated Claude sessions currently retain metadata-only discovery.
+
+The Kitty installer adds a separate config include, a watcher and `Ctrl+Alt+Shift+F12` to start the private bridge. New Kitty windows start it automatically. For an already open Kitty instance, reload its config and press that shortcut once. The bridge receives Kitty's private control FD and exposes only filtered pane identities and focus of an existing pane through a socket restricted to the desktop user. It does not enable general remote control or expose terminal input/output. Exact shell ancestry connects each avatar to its pane; double-click selects it without launching another CLI. This adapter currently requires one Kitty instance with one native window; multiple tabs and split panes are supported, while ambiguous native windows remain unbound.
+
+Set `AGENTLINGS_DISABLE_ELEVATED_OBSERVER=1` to exclude elevated sessions from a monitor (also used to isolate synthetic desktop tests).
+
+Snapshots under `/run/agentlings-observer-<uid>` are root-owned, group-readable, atomically replaced and expire after eight seconds. The consumer rejects writable, redirected, oversized or expired files. `agentlings status` reports observer health separately. Disable it with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
 
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 

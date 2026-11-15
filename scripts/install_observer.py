@@ -24,6 +24,7 @@ def install_file(source, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--activity', action='store_true', help='Enable sanitized activity from matched root Codex rollouts')
     parser.add_argument('--uid', type=int, required=True)
     args = parser.parse_args()
     if os.geteuid() != 0 or args.uid <= 0:
@@ -35,8 +36,17 @@ def main():
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
         raise SystemExit('Observer installation directory must be owned and writable only by root.')
     install_file(ROOT/'elevated_sessions.py', destination/'observer.py')
+    for name in ('elevated_activity', 'session_trace', 'session_activity', 'session_metrics', 'session_verification'):
+        install_file(ROOT/(name+'.py'), destination/(name+'.py'))
     unit = Path('/etc/systemd/system/agentlings-observer@.service')
     install_file(ROOT/'linux/agentlings-observer@.service', unit)
+    override = Path(f'/etc/systemd/system/agentlings-observer@{args.uid}.service.d')
+    override.mkdir(exist_ok=True)
+    activity_override = override/'activity.conf'
+    if args.activity:
+        activity_override.write_text('[Service]\nExecStart=\nExecStart=/usr/bin/python3 -I /usr/local/lib/agentlings-observer/observer.py --uid %i --activity\nProtectHome=tmpfs\nBindReadOnlyPaths=/root/.codex\n')
+    else:
+        activity_override.unlink(missing_ok=True)
     subprocess.run(['systemd-analyze', 'verify', str(unit)], check=True)
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
     service = f'agentlings-observer@{args.uid}.service'

@@ -13,6 +13,7 @@ UUID = 'agentlings@agentlings.local'
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gnome-extension', action='store_true')
+    parser.add_argument('--kitty', action='store_true', help='Install private Kitty focus integration')
     parser.add_argument('--autostart', action='store_true')
     args = parser.parse_args()
     if sys.platform != 'linux' or os.getuid() == 0:
@@ -29,6 +30,15 @@ def main():
     for source in ROOT.glob('*.py'):
         if not source.name.startswith('test_'):
             shutil.copy2(source, app / source.name)
+    if args.kitty:
+        kitty = home / '.config/kitty'
+        kitty.mkdir(parents=True, exist_ok=True)
+        fragment = kitty/'agentlings.conf'
+        fragment.write_text(f'watcher {app}/kitty_watcher.py\nmap ctrl+alt+shift+f12 remote_control_script {app}/kitty_bridge.py\n')
+        config = kitty/'kitty.conf'
+        content = config.read_text() if config.exists() else ''
+        if 'include agentlings.conf' not in content.splitlines():
+            config.write_text(content+'\n# Agentlings local pane focus bridge\ninclude agentlings.conf\n')
     launcher = home / '.local/bin/agentlings'
     launcher.parent.mkdir(parents=True, exist_ok=True)
     launcher.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, str(app/'agentlings.py')]) + ' "$@"\n')

@@ -80,10 +80,16 @@ def selected_tab(window):
 
 
 def tab_selected(window, ident):
+    if str(ident).startswith('kitty:'):
+        from kitty_tabs import tab_selected as selected
+        return selected(window, ident)
     return selected_tab(window) == ident
 
 
 def select_tab(record):
+    if str(record.get('tab_id', '')).startswith('kitty:'):
+        from kitty_tabs import select_tab as select
+        return select(record)
     from linux_desktop import LinuxWindows
     native = LinuxWindows()
     window = native.inspect(record.get('hwnd'))
