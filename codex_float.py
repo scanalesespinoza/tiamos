@@ -105,6 +105,10 @@ class Reader:
         self.registration_loader = registration_loader
         self.discovery = None
         self.claude = None
+        self.elevated = None
+        if sys.platform == 'linux' and cli_only and discover:
+            from elevated_sessions import ElevatedSessions
+            self.elevated = ElevatedSessions()
         self.included_loader = included_loader or (lambda: {})
         if discover:
             from terminal_discovery import TerminalDiscovery
@@ -197,6 +201,8 @@ class Reader:
         self.traces = {key: trace for key, trace in self.traces.items() if key in seen}
         if self.claude:
             result.extend(self.claude.snapshot(terminals))
+        if self.elevated:
+            result.extend(self.elevated.snapshot())
         return result
 
 
@@ -440,6 +446,8 @@ def serve():
             associate(ident, target, manual=bindings.get(ident, {}).get('manual', False), tab_id=manual_tab)
             return 'break'
         try:
+            if terminal.get('elevated'):
+                raise RuntimeError('Este agente sigue abierto con permisos elevados. Selecciona su pestaña en la terminal; Agentlings no abre otra sesión administrativa.')
             if entry['chat'].get('provider') == 'claude':
                 from claude_sessions import launch_claude
                 launch_claude(entry['chat'])
@@ -881,6 +889,7 @@ def serve():
             atomic_json(STATE / 'status.json', {
                 'running': True, 'heartbeat': time.time(), 'pid': os.getpid(),
                 'capabilities': capabilities(native, hotkeys),
+                'elevated_observer': reader.elevated.status if reader.elevated else None,
                 'chats': len(widgets),
                 'working': sum(v['state'] == 'working' for v in widgets.values()),
                 'error': last_error, 'focus_error': focus_error, 'selected': selected,

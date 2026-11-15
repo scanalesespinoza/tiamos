@@ -43,6 +43,23 @@ python3 scripts/smoke_linux_desktop.py
 
 The walkthrough creates a private D-Bus session, GNOME compositor and virtual monitor. It selects two real GNOME Terminal tabs, tests focus sizing, minimization/restoration, double-click docking, following changed window geometry, global hide/show/placement shortcuts and shortcut cleanup. Sessions and input are synthetic; no agent or model is launched, and the operator's desktop settings and input are untouched. The original portable smoke test remains available as `scripts/smoke_release.py`.
 
+### Agents running through sudo or su
+
+Ordinary discovery observes the desktop user's CLI processes. A CLI running as root in that user's terminal would otherwise be missing from the avatars. An optional metadata observer can show these existing processes without restarting them or running the graphical application as root:
+
+```sh
+# Run from the desktop user's shell, after installing the application:
+sudo python3 scripts/install_observer.py --uid "$(id -u)"
+agentlings off
+agentlings on
+```
+
+The installer copies a standalone observer into a root-owned system directory and enables `agentlings-observer@<desktop-uid>.service`. It exports only live `codex` and `claude` process IDs, creation times, provider names and terminal ancestry for that desktop UID. A root CLI must descend from the user's live terminal process; unrelated root agents, background servers, other users' terminals and ordinary shells are excluded. Kitty is supported for this process discovery, including existing elevated tabs; exact Kitty tab selection is still unavailable.
+
+These companions are named **Admin 1**, **Admin 2**, etc., in process-start order. They show **Sin estado disponible**, because a live CLI process does not prove whether a turn is working, waiting or completed. The observer does not read root conversation databases, transcripts, credentials, command arguments, environment or terminal contents, and cannot launch elevated commands. Double-click does not resume an administrative CLI. Select its existing terminal tab to interact with it. Avatars disappear when their CLI processes exit.
+
+The graphical app remains under the desktop user. The service reads process metadata every two seconds and writes an atomic snapshot under `/run/agentlings-observer-<uid>`, owned by root and readable by the user's primary group. The reader rejects writable, redirected, oversized or expired snapshots; observations expire after eight seconds. Nothing is copied from `/root` or made readable there. `agentlings status` reports `elevated_observer` separately from normal session activity. Disable the optional observer with `sudo systemctl disable --now agentlings-observer@$(id -u).service` from the desktop user's shell.
+
 Run native Codex and Claude Code CLI sessions in Windows Terminal with draggable animated companions. The ChatGPT/Codex desktop app can remain closed. Codex companions have a dark blue background; Claude companions have a dark orange background. Each companion has a persistent color and accessory, with gestures for observed activity; an idle session sleeps. Only native CLI sessions or sessions launched through this utility with activity today are shown, using the Windows local date.
 
 ## Install
