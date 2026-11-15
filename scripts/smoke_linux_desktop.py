@@ -38,6 +38,7 @@ def inside(folder):
     folder = Path(folder)
     log = (folder/'desktop.log').open('w')
     processes = []
+    monitor_started = False
     def spawn(command):
         process = subprocess.Popen(command, stdout=log, stderr=log)
         processes.append(process)
@@ -92,8 +93,10 @@ def inside(folder):
         def keys(symbols):
             for symbol in symbols:
                 call(remote, session, iface, 'NotifyKeyboardKeysym', '(ub)', (symbol, True))
+                time.sleep(.04)
             for symbol in reversed(symbols):
                 call(remote, session, iface, 'NotifyKeyboardKeysym', '(ub)', (symbol, False))
+                time.sleep(.04)
         # Super+H minimizes an actual Wayland terminal, Activate restores it.
         keys([0xffeb, ord('h')])
         until(lambda: (desktop.refresh(force=True), native.inspect(window.hwnd).minimized)[1], 'Minimize not observed')
@@ -120,6 +123,7 @@ def inside(folder):
         connection_db.commit(); connection_db.close()
         os.environ.update(CODEX_HOME=str(codex), CLAUDE_CONFIG_DIR=str(folder/'claude'), AGENTLINGS_STATE_DIR=str(state))
         run([*app, 'on'])
+        monitor_started = True
         def status():
             return json.loads(run([*app, 'status']).stdout)
         data = until(lambda: (s if (s := status()).get('chats') == 2 and len(s.get('hotkeys', {})) == 2 else None),
@@ -137,8 +141,8 @@ def inside(folder):
         def shortcut(action):
             keys([keysyms[part] for part in data['hotkeys'][action].split('+')])
         assert data['hotkeys'] == {'cycle_next': 'Ctrl+Alt+Page_Down', 'cycle_previous': 'Ctrl+Alt+Page_Up'}
-        for action, modes in [('cycle_next', ('left', 'bottom', 'top')),
-                              ('cycle_previous', ('bottom', 'left', 'top'))]:
+        for action, modes in [('cycle_next', ('left', 'bottom', 'right', 'top')),
+                              ('cycle_previous', ('right', 'bottom', 'left', 'top'))]:
             for mode in modes:
                 shortcut(action)
                 until(lambda: status().get('layout') == mode, 'Placement cycle failed: '+mode)
@@ -206,7 +210,8 @@ def inside(folder):
             'global_shortcuts': True, 'shortcut_cleanup': True, 'crash_cleanup': True, 'reconnection': True}))
     finally:
         try:
-            run([*app, 'off'])
+            if monitor_started:
+                run([*app, 'off'])
         except Exception:
             pass
         for process in reversed(processes):

@@ -43,10 +43,14 @@ def main():
     call(session,iface,'Start')
     def step(direction):
         current = state()['layout']
-        expected = PLACEMENT_CYCLE[(PLACEMENT_CYCLE.index(current)+direction)%3]
+        expected = PLACEMENT_CYCLE[(PLACEMENT_CYCLE.index(current)+direction)%len(PLACEMENT_CYCLE)]
         keys=[0xffe3,0xffe9,0xff56 if direction==1 else 0xff55]
-        for key in keys:call(session,iface,'NotifyKeyboardKeysym','(ub)',(key,True))
-        for key in reversed(keys):call(session,iface,'NotifyKeyboardKeysym','(ub)',(key,False))
+        for key in keys:
+            call(session,iface,'NotifyKeyboardKeysym','(ub)',(key,True))
+            time.sleep(.04)
+        for key in reversed(keys):
+            call(session,iface,'NotifyKeyboardKeysym','(ub)',(key,False))
+            time.sleep(.04)
         until(lambda: state().get('layout')==expected)
         s=state();left,top,right,bottom=s['layout_area']
         for ident,(x,y) in s['windows'].items():
@@ -56,20 +60,20 @@ def main():
         assert not s['hotkey_error'] and not s['error']
         print('PASS', 'AvPág' if direction==1 else 'RePág', expected, flush=True)
     try:
-        for direction in (1,1,1,-1,-1,-1):step(direction)
-        while state()['layout']!='bottom':step(1)
+        for direction in (1,)*len(PLACEMENT_CYCLE)+(-1,)*len(PLACEMENT_CYCLE):step(direction)
+        while state()['layout']!='right':step(1)
         app=Path.home()/'.local/bin/agentlings'
         subprocess.run([str(app),'off'],check=True,timeout=15)
         assert all('/agentlings-cycle_' not in p for p in bindings.get_strv('custom-keybindings'))
         assert unrelated()==other_bindings
         subprocess.run([str(app),'on'],check=True,timeout=15)
-        until(lambda: state().get('chats')==initial['chats'] and state().get('layout')=='bottom')
+        until(lambda: state().get('chats')==initial['chats'] and state().get('layout')=='right')
         assert state()['hotkeys']==initial['hotkeys']
         assert all(wm.get_value(key)==value for key,value in workspace_keys.items())
-        print('PASS bottom persistence, shortcut cleanup/re-registration, workspace bindings preserved',flush=True)
+        print('PASS right persistence, shortcut cleanup/re-registration, workspace bindings preserved',flush=True)
     finally:
         if state().get('running'):
-            for _ in range(3):
+            for _ in range(len(PLACEMENT_CYCLE)):
                 if state().get('layout')==original:break
                 step(1)
         call(session,iface,'Stop')

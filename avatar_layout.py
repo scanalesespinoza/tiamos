@@ -8,10 +8,9 @@ import sys
 from itertools import chain
 
 
-PLACEMENT_CYCLE = ('top', 'left', 'bottom')
-PLACEMENTS = [('top', 'Arriba centro'), ('left', 'Izquierda centro'), ('bottom', 'Abajo centro')]
-if sys.platform != 'linux':
-    PLACEMENTS.append(('right', 'Derecha centro'))
+PLACEMENT_CYCLE = ('top', 'left', 'bottom', 'right')
+PLACEMENTS = [('top', 'Arriba centro'), ('left', 'Izquierda centro'),
+              ('bottom', 'Abajo centro'), ('right', 'Derecha centro')]
 
 
 def cycle_position(current, direction):

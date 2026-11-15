@@ -50,7 +50,7 @@ class LayoutTests(unittest.TestCase):
 
     def test_page_cycle_wraps_both_directions(self):
         current = 'top'
-        for direction, sequence in ((1, ('left', 'bottom', 'top')), (-1, ('bottom', 'left', 'top'))):
+        for direction, sequence in ((1, ('left', 'bottom', 'right', 'top')), (-1, ('right', 'bottom', 'left', 'top'))):
             for expected in sequence:
                 current = cycle_position(current, direction)
                 self.assertEqual(current, expected)
