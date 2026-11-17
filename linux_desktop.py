@@ -27,6 +27,7 @@ class DesktopBridge:
         self.attached = False
         self.want_shortcuts = False
         self.next_poll = 0
+        self.next_attach = 0
         self.connection = None
 
     def call(self, method, signature=None, args=()):
@@ -50,7 +51,13 @@ class DesktopBridge:
             data = json.loads(self.call('Snapshot')[0])
             if data.get('version') != 1:
                 raise ValueError('Unsupported desktop protocol')
-            if self.want_shortcuts and not self.attached:
+            now = time.monotonic()
+            if self.want_shortcuts and (not self.attached or
+                    (not self.labels and now >= self.next_attach)):
+                # A failed grab can be transient during login or stale-binding
+                # cleanup. Keep ownership, but retry without busy polling or
+                # re-grabbing shortcuts that already work.
+                self.next_attach = now + 3
                 attached = json.loads(self.call('Attach')[0])
                 self.labels = attached['labels']
                 self.attached = True

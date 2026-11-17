@@ -60,6 +60,56 @@ class LinuxDesktopTests(unittest.TestCase):
             self.assertFalse(native.activate(window()))
         desktop.call.assert_not_called()
 
+    def test_transient_shortcut_conflict_recovers_without_monitor_restart(self):
+        bridge = DesktopBridge()
+        bridge.want_shortcuts = True
+        labels = {'cycle_next': 'Ctrl+Alt+Page_Down', 'cycle_previous': 'Ctrl+Alt+Page_Up'}
+        attempts = []
+        def call(method):
+            if method == 'Attach':
+                attempts.append(method)
+                return (json.dumps({'labels': labels if len(attempts) > 1 else {},
+                                    'error': None if len(attempts) > 1 else 'occupied'}),)
+            return (json.dumps({'version': 1, 'labels': labels if len(attempts) > 1 else {},
+                                'error': None if len(attempts) > 1 else 'occupied',
+                                'events': ['cycle_next'] if len(attempts) == 1 else []}),)
+        with patch.object(bridge, 'call', side_effect=call), patch('linux_desktop.time.monotonic') as clock:
+            clock.return_value = 10
+            bridge.refresh(force=True)
+            self.assertTrue(bridge.available)
+            self.assertEqual(bridge.error, 'occupied')
+            for instant in (10.1, 11, 12.9):
+                clock.return_value = instant
+                bridge.refresh(force=True)
+            self.assertEqual(len(attempts), 1)
+            clock.return_value = 13
+            bridge.refresh(force=True)
+            self.assertEqual(bridge.labels, labels)
+            self.assertIsNone(bridge.error)
+            self.assertEqual(bridge.events.qsize(), 4)
+            clock.return_value = 30
+            bridge.refresh(force=True)
+            self.assertEqual(len(attempts), 2)
+
+    def test_occupied_shortcuts_keep_error_and_disabled_discovery_never_attaches(self):
+        bridge = DesktopBridge()
+        bridge.want_shortcuts = True
+        def call(method):
+            return (json.dumps({'version': 1, 'labels': {}, 'error': 'occupied'}),)
+        with patch.object(bridge, 'call', side_effect=call) as calls, \
+             patch('linux_desktop.time.monotonic') as clock:
+            for instant in (0, 3, 6):
+                clock.return_value = instant
+                bridge.refresh(force=True)
+                self.assertEqual(bridge.labels, {})
+                self.assertEqual(bridge.error, 'occupied')
+            self.assertEqual(sum(c.args[0] == 'Attach' for c in calls.call_args_list), 3)
+            bridge.want_shortcuts = False
+            calls.reset_mock()
+            clock.return_value = 9
+            bridge.refresh(force=True)
+            self.assertEqual([c.args[0] for c in calls.call_args_list], ['Snapshot'])
+
     def test_monitor_selection_preserves_negative_origins(self):
         desktop = SimpleNamespace(refresh=lambda: {'pointer': [-100, 100],
             'monitors': [[-1600, 30, 0, 900], [0, 30, 1920, 1080]]})
