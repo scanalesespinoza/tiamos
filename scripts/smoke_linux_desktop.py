@@ -122,12 +122,29 @@ def inside(folder):
                 'hwnd': window.hwnd, 'window_pid': window.pid, 'tab_id': record['id'], 'selected': record['selected']}))
         connection_db.commit(); connection_db.close()
         os.environ.update(CODEX_HOME=str(codex), CLAUDE_CONFIG_DIR=str(folder/'claude'), TIAMOS_STATE_DIR=str(state))
+        # Occupy one real accelerator on this isolated compositor before the
+        # monitor starts. The test bus has no settings daemon; claim its name
+        # solely to use Shell's restricted accelerator API on that private bus.
+        assert call('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                    'RequestName', '(su)', ('org.gnome.SettingsDaemon.MediaKeys', 4))[0] == 1
+        blocker = call('org.gnome.Shell', '/org/gnome/Shell', 'org.gnome.Shell',
+                       'GrabAccelerator', '(suu)', ('<Control><Alt>Page_Down', 1, 0))[0]
+        assert blocker, 'Could not reserve the test accelerator'
         run([*app, 'on'])
         monitor_started = True
         def status():
             return json.loads(run([*app, 'status']).stdout)
+        blocked = until(lambda: (s if (s := status()).get('chats') == 2 and s.get('hotkey_error') else None),
+                        'Monitor did not report the real shortcut conflict')
+        assert blocked['hotkeys'] == {}
+        time.sleep(3.2)
+        assert status()['hotkeys'] == {}, 'Monitor stole an occupied shortcut'
+        assert call('org.gnome.Shell', '/org/gnome/Shell', 'org.gnome.Shell',
+                    'UngrabAccelerator', '(u)', (blocker,))[0]
         data = until(lambda: (s if (s := status()).get('chats') == 2 and len(s.get('hotkeys', {})) == 2 else None),
-                     'Monitor did not discover sessions/register shortcuts')
+                     'Monitor did not recover shortcuts after the conflict cleared')
+        assert data['pid'] == blocked['pid'], 'Shortcut recovery restarted the monitor'
+        assert not data['hotkey_error']
         assert data['capabilities']['desktop_mode'] == 'gnome'
         for index, record in enumerate(records):
             select_tab(dict(hwnd=window.hwnd, window_pid=window.pid, tab_id=record['id']))
@@ -135,7 +152,7 @@ def inside(folder):
             data = status()
             assert data['sizes'][identities[index]] == [178, 152]
             assert data['sizes'][identities[1-index]] == [89, 76]
-        # Use the advertised bindings, including the conflict fallback group.
+        # Use the advertised bindings after automatic conflict recovery.
         keysyms = {'Super': 0xffeb, 'Ctrl': 0xffe3, 'Alt': 0xffe9, 'Shift': 0xffe1,
                    'Page_Up': 0xff55, 'Page_Down': 0xff56}
         def shortcut(action):
@@ -207,7 +224,8 @@ def inside(folder):
         call(remote, session, iface, 'Stop')
         print(json.dumps({'gnome_wayland': True, 'exact_tabs': True, 'focus_sizing': True,
             'minimize_restore': True, 'docking': True, 'follow_geometry': True,
-            'global_shortcuts': True, 'shortcut_cleanup': True, 'crash_cleanup': True, 'reconnection': True}))
+            'global_shortcuts': True, 'shortcut_conflict_recovery': True,
+            'shortcut_cleanup': True, 'crash_cleanup': True, 'reconnection': True}))
     finally:
         try:
             if monitor_started:
