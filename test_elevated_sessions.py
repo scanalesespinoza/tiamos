@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from elevated_sessions import collect, describe, load_feed
 from session_status import status_code
@@ -16,6 +17,11 @@ def process(pid=20, uid=0, name='codex', tty='/dev/pts/2', parents=(), birth=10)
 
 @unittest.skipUnless(os.name == 'posix', 'Optional POSIX elevated-process observer')
 class ObserverTests(unittest.TestCase):
+    def setUp(self):
+        terminal = patch('elevated_sessions.controlling_terminal', side_effect=lambda p: p.terminal())
+        terminal.start()
+        self.addCleanup(terminal.stop)
+
     def test_only_root_cli_under_target_users_terminal_is_exported(self):
         terminal = process(10, uid=1000, name='kitty')
         accepted = process(parents=[terminal])

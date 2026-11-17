@@ -36,7 +36,7 @@ def main():
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
         raise SystemExit('Observer installation directory must be owned and writable only by root.')
     install_file(ROOT/'elevated_sessions.py', destination/'observer.py')
-    for name in ('elevated_activity', 'session_trace', 'session_activity', 'session_metrics', 'session_verification'):
+    for name in ('process_terminal', 'elevated_activity', 'session_trace', 'session_activity', 'session_metrics', 'session_verification'):
         install_file(ROOT/(name+'.py'), destination/(name+'.py'))
     unit = Path('/etc/systemd/system/agentlings-observer@.service')
     install_file(ROOT/'linux/agentlings-observer@.service', unit)

@@ -5,6 +5,7 @@ import time
 import uuid
 
 import psutil
+from process_terminal import controlling_terminal
 from cli_sessions import STATE, read, save
 from claude_sessions import ClaudeSessions
 from session_history import load_history, history_pin
@@ -17,7 +18,8 @@ def native_clients():
             name = (process.info['name'] or '').lower()
             if name not in {'codex', 'claude', 'node', 'nodejs'}:
                 continue
-            if process.uids().real != os.getuid() or not process.terminal():
+            terminal = controlling_terminal(process)
+            if process.uids().real != os.getuid() or not terminal:
                 continue
             provider = name if name in {'codex', 'claude'} else None
             if provider is None:
@@ -51,7 +53,7 @@ def native_clients():
                 pass
             result.append({'pid': process.pid, 'cwd': process.cwd(), 'provider': provider,
                            'created_at': process.create_time(), 'session_id': ident,
-                           'config_dir': config_dir, 'terminal_id': process.terminal(),
+                           'config_dir': config_dir, 'terminal_id': terminal,
                            'terminal_pid': terminal_ancestor(process)})
         except (psutil.Error, OSError):
             continue

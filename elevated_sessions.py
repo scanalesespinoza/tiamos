@@ -15,6 +15,11 @@ import time
 
 import psutil
 
+# The installed observer runs under -I from a root-owned application bundle.
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from process_terminal import controlling_terminal
+
 TERMINALS = {'kitty', 'gnome-terminal-server', 'gnome-terminal-', 'konsole',
              'xterm', 'ptyxis', 'kgx', 'alacritty', 'ghostty', 'xfce4-terminal'}
 MAX_SESSIONS = 64
@@ -30,7 +35,7 @@ def describe(process, desktop_uid):
     """A root CLI belongs here only through a live, user-owned terminal ancestor."""
     try:
         provider = process.name().lower()
-        if provider not in ('codex', 'claude') or process.uids().real != 0 or not process.terminal():
+        if provider not in ('codex', 'claude') or process.uids().real != 0 or not controlling_terminal(process):
             return None
         parents = process.parents()[:32]
         terminal = next((parent for parent in parents
