@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from elevated_activity import ClaudeActivity
 from elevated_sessions import collect, describe, load_feed
 from session_status import status_code
 
@@ -116,3 +117,87 @@ class ObserverTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+CLAUDE_SID = '11111111-2222-4333-8444-555555555555'
+
+
+@unittest.skipUnless(os.name == 'posix', 'Optional POSIX elevated-process observer')
+class ClaudeActivityTests(unittest.TestCase):
+    def setUp(self):
+        ticks = patch('claude_trace.linux_start_ticks', return_value=4242)
+        ticks.start()
+        self.addCleanup(ticks.stop)
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.home = Path(self.folder.name)
+        (self.home/'sessions').mkdir()
+        (self.home/'projects'/'-home-user').mkdir(parents=True)
+
+    def record(self, provider='claude'):
+        return {'pid': 20, 'created_at': 10, 'provider': provider, 'terminal_pid': 10,
+                'terminal_created_at': 5, 'shell_pid': 11}
+
+    def session(self, **extra):
+        data = {'pid': 20, 'sessionId': CLAUDE_SID, 'procStart': '4242', 'kind': 'interactive',
+                'entrypoint': 'cli', 'cwd': '/home/user/project', 'name': 'Services Offering', **extra}
+        (self.home/'sessions'/'20.json').write_text(json.dumps(data))
+
+    def transcript(self, *records):
+        path = self.home/'projects'/'-home-user'/f'{CLAUDE_SID}.jsonl'
+        path.write_text(''.join(json.dumps(r) + '\n' for r in records))
+
+    def enrich(self, *records):
+        ClaudeActivity(self.home).enrich(list(records))
+        return records
+
+    def test_busy_session_reports_working_with_title_and_project(self):
+        self.session(status='busy')
+        self.transcript({'type': 'user', 'sessionId': CLAUDE_SID, 'uuid': 'u1',
+                         'timestamp': '2026-11-21T10:00:00Z', 'message': {'content': 'Refina la oferta'}})
+        row, = self.enrich(self.record())
+        chat = row['chat']
+        self.assertEqual((chat['id'], chat['state'], chat['project']), (f'claude:{CLAUDE_SID}', 'working', 'project'))
+        self.assertEqual(chat['title'], 'Services Offering')
+
+    def test_user_given_name_wins_over_generated_title(self):
+        self.transcript({'type': 'ai-title', 'sessionId': CLAUDE_SID, 'aiTitle': 'Generated title'})
+        self.session(status='busy')
+        row, = self.enrich(self.record())
+        self.assertEqual(row['chat']['title'], 'Generated title')
+        self.session(status='busy', nameSource='user')
+        row, = self.enrich(self.record())
+        self.assertEqual(row['chat']['title'], 'Services Offering')
+
+    def test_waiting_and_idle_states(self):
+        self.session(status='waiting_for_permission')
+        row, = self.enrich(self.record())
+        self.assertEqual((row['chat']['state'], row['chat']['activity']['phase']), ('working', 'Esperando intervención'))
+        self.session(status='idle')
+        row, = self.enrich(self.record())
+        self.assertEqual(row['chat']['state'], 'sleeping')
+
+    def test_unverifiable_sessions_stay_unknown(self):
+        self.session(status='busy', procStart='9999')  # recycled pid: start ticks differ
+        codex, claude = self.enrich(self.record('codex'), self.record())
+        self.assertNotIn('chat', claude)
+        self.assertNotIn('chat', codex)
+        (self.home/'sessions'/'20.json').unlink()
+        row, = self.enrich(self.record())
+        self.assertNotIn('chat', row)
+
+    def test_unknown_status_without_transcript_is_not_guessed(self):
+        self.session(status='something-new')
+        row, = self.enrich(self.record())
+        self.assertNotIn('chat', row)
+
+    def test_enriched_feed_passes_desktop_validation(self):
+        self.session(status='busy')
+        data = {'version': 1, 'uid': 1000, 'heartbeat': 100, 'sessions': list(self.enrich(self.record()))}
+        path = self.home/'feed'/'sessions.json'
+        path.parent.mkdir(mode=0o750)
+        path.write_text(json.dumps(data))
+        path.chmod(0o600)
+        rows = load_feed(path, 1000, now=101, trusted_uid=os.getuid())
+        self.assertEqual((rows[0]['provider'], rows[0]['state']), ('claude', 'working'))
+

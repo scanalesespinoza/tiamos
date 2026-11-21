@@ -1,4 +1,4 @@
-"""Read-only Codex activity for root clients already scoped to a user's terminal.
+"""Read-only Codex and Claude activity for root clients already scoped to a user's terminal.
 
 Shared-server clients do not hold rollout files. Correlate their latest rendered
 assistant text with exactly one rollout. No fuzzy/cwd match or activity inferred
@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import sqlite3
 
+from claude_trace import ClaudeTrace, valid_session
 from session_activity import safe_preview, text_content
 from session_trace import Trace
 
@@ -101,3 +102,69 @@ class CodexActivity:
         self.messages = {k:v for k,v in self.messages.items() if k in metadata}
         live = {r.get('chat', {}).get('id') for r in records}
         self.traces = {k:v for k,v in self.traces.items() if k in live}
+
+
+CLAUDE_WORKING = {'busy', 'working', 'running', 'thinking'}
+CLAUDE_WAITING = {'waiting', 'needs_input', 'waiting_for_permission', 'waiting_for_input'}
+MAX_SESSION_BYTES = 64 * 1024
+
+
+class ClaudeActivity:
+    """Claude CLI keeps one metadata file per live process, so no text correlation is needed.
+
+    The record must match the process identity (pid, interactive CLI, start time), and the
+    transcript must be a single file under the root config dir. Anything else stays unknown.
+    """
+
+    def __init__(self, home=Path('/root/.claude')):
+        self.home = Path(home)
+        self.traces = {}
+
+    def session(self, record):
+        path = self.home/'sessions'/f"{record['pid']}.json"
+        if path.stat().st_size > MAX_SESSION_BYTES:
+            return None
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) and valid_session(data, record) else None
+
+    def enrich(self, records):
+        live = set()
+        for record in records:
+            if record['provider'] != 'claude':
+                continue
+            try:
+                data = self.session(record)
+            except (OSError, ValueError):
+                continue
+            if not data:
+                continue
+            session_id = data['sessionId']
+            paths = list((self.home/'projects').glob(f'*/{session_id}.jsonl'))
+            trace = self.traces.get(session_id)
+            if len(paths) == 1 and (trace is None or trace.path != paths[0]):
+                trace = self.traces[session_id] = ClaudeTrace(paths[0], session_id)
+            if trace is not None:
+                try:
+                    trace.read()
+                except OSError:
+                    trace = None
+            live.add(session_id)
+            activity = trace.activity.summary() if trace else {}
+            status = data.get('status')
+            if status in CLAUDE_WORKING:
+                state = 'working'
+            elif status in CLAUDE_WAITING:
+                state, activity['phase'] = 'working', 'Esperando intervención'
+            elif status == 'idle':
+                state = 'sleeping'
+            elif trace is not None:
+                state = 'working' if trace.active else 'sleeping'
+            else:
+                continue
+            # A name the user set (/rename) wins over the transcript's generated title.
+            named = data.get('name') if data.get('nameSource') == 'user' else ''
+            title = named or (trace.title if trace else '') or data.get('name') or 'Claude'
+            record['chat'] = {'id': f'claude:{session_id}', 'title': safe_preview(title, 100),
+                'project': safe_preview(Path(data.get('cwd') or '').name, 60),
+                'state': state, 'activity': activity}
+        self.traces = {k: v for k, v in self.traces.items() if k in live}

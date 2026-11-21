@@ -164,25 +164,26 @@ class ElevatedSessions:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--uid', required=True, type=int)
-    parser.add_argument('--activity', action='store_true', help='Read matched local Codex activity')
+    parser.add_argument('--activity', action='store_true', help='Read matched local Codex and Claude activity')
     parser.add_argument('--once', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0 or args.uid <= 0:
         parser.error('A root service and a non-root desktop UID are required.')
     import pwd
     account = pwd.getpwuid(args.uid)
-    activity = None
+    readers = []
     if args.activity:
         # Only the root-owned installed bundle is imported under Python -I.
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from elevated_activity import CodexActivity
-        activity = CodexActivity()
+        from elevated_activity import ClaudeActivity, CodexActivity
+        readers = [CodexActivity(), ClaudeActivity()]
     while True:
         data = collect(args.uid)
-        if activity:
+        for reader in readers:
+            # One provider's missing or locked state must not hide the other's activity.
             try:
-                activity.enrich(data['sessions'])
+                reader.enrich(data['sessions'])
             except (OSError, ValueError, sqlite3.Error):
                 pass
         write_feed(feed_path(args.uid), data, account.pw_gid)

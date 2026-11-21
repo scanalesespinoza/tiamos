@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -27,6 +28,17 @@ class ClaudeTests(unittest.TestCase):
         self.assertFalse(valid_session(metadata, dict(client, created_at=200)))
         self.assertFalse(valid_session(dict(metadata, kind='background'), client))
         self.assertFalse(valid_session(dict(metadata, sessionId='invalid'), client))
+
+    @unittest.skipUnless(os.name == 'posix', 'Linux records procStart as boot-relative clock ticks')
+    def test_linux_metadata_matches_process_start_ticks(self):
+        client = {'pid': 10, 'created_at': 100}
+        metadata = {'pid': 10, 'sessionId': SID, 'procStart': '26163041', 'kind': 'interactive', 'entrypoint': 'cli'}
+        with patch('claude_trace.linux_start_ticks', return_value=26163041):
+            self.assertTrue(valid_session(metadata, client))
+        with patch('claude_trace.linux_start_ticks', return_value=26169999):  # recycled pid
+            self.assertFalse(valid_session(metadata, client))
+        with patch('claude_trace.linux_start_ticks', return_value=None):  # process gone
+            self.assertFalse(valid_session(metadata, client))
 
     def test_turn_lifecycle_actions_final_result_and_privacy(self):
         trace = ClaudeTrace('unused', SID)
